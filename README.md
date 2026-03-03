@@ -1,5 +1,7 @@
 # 🤖 Pipeline de Mineração IOMAT + IA
 
+> **Vínculo Institucional:** Este projeto foi desenvolvido para atender às demandas do edital referente ao projeto **"Mapeamento da legislação do ensino superior tecnológico (1961-2008)"**.
+
 Este projeto é uma ferramenta de automação voltada para a extração, análise e classificação de Diários Oficiais do Estado de Mato Grosso (IOMAT). A aplicação é construída em **Python/Streamlit** e integra inteligência artificial usando a API da **OpenAI** para separar regulamentações, atos legais relevantes, de menções casuais, realizando o download dos cadernos (PDFs) no final.
 
 ## 🚀 Funcionalidades
@@ -55,3 +57,10 @@ O navegador abrirá automaticamente em `http://localhost:8501`. Na barra lateral
 ## 💡 Customizando a IA
 
 Se desejar alterar a pesquisa, basta editar a variável `prompt_sistema` dentro do arquivo `app_iomat.py` e modificar as suas `REGRAS DE CLASSIFICAÇÃO`.
+
+## 👩‍💻 Autores e Desenvolvedores
+
+Código escrito e idealizado por:
+* [Beatriz Schuindt](https://github.com/BeatrizSchuindt)
+* [Henrique](https://github.com/henrltop)
+
