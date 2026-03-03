@@ -7,7 +7,17 @@ import urllib.parse
 import sqlite3
 import json
 from openai import OpenAI
+from concurrent.futures import ThreadPoolExecutor
 import os
+import tiktoken
+
+def contar_tokens(texto, modelo="gpt-4o-mini"):
+    try:
+        codificador = tiktoken.encoding_for_model(modelo)
+        return len(codificador.encode(texto))
+    except KeyError:
+        codificador = tiktoken.get_encoding("cl100k_base")
+        return len(codificador.encode(texto))
 
 st.set_page_config(page_title="Mineração IOMAT + IA", page_icon="🤖", layout="wide")
 
@@ -33,13 +43,16 @@ def inicializar_banco():
             termo_buscado TEXT,
             tipo_ato TEXT,
             justificativa TEXT,
-            texto_bruto TEXT
+            texto_bruto TEXT,
+            caminho_pdf TEXT,
+            UNIQUE(edicao, pagina, termo_buscado)
         )
     ''')
+    # Migração para bancos criados sem a coluna caminho_pdf
     try:
         cursor.execute("ALTER TABLE documentos ADD COLUMN caminho_pdf TEXT")
-    except:
-        pass 
+    except sqlite3.OperationalError:
+        pass  # Coluna já existe
     conn.commit()
     return conn
 
@@ -83,8 +96,9 @@ Responda EXCLUSIVAMENTE em JSON:
   "justificativa": "string (motivo curto da classificação)"
 }"""
     
-    texto_limpo = texto[:5000]
-    prompt_usuario = f"Palavra-chave: '{palavra_chave}'.\n\nTexto:\n{texto_limpo}" 
+    # Removido o limite de 5000 caracteres. Enviaremos o texto bruto extraído da página.
+    texto_limpo = texto 
+    prompt_usuario = f"Palavra-chave: '{palavra_chave}'.\n\nTexto:\n{texto_limpo}"
 
     for tentativa in range(3):
         try:
@@ -95,7 +109,11 @@ Responda EXCLUSIVAMENTE em JSON:
                 temperature=0.0 
             )
             resposta_crua = response.choices[0].message.content
-            return json.loads(resposta_crua), prompt_usuario, resposta_crua, None
+            try:
+                parsed = json.loads(resposta_crua)
+            except json.JSONDecodeError:
+                parsed = {"relevante": False, "tipo_ato": "Erro de Parse", "justificativa": "A IA retornou JSON malformado."}
+            return parsed, prompt_usuario, resposta_crua, None
         except Exception as e:
             if "Rate limit" in str(e) or "429" in str(e):
                 time.sleep(3)
@@ -125,11 +143,11 @@ def fazer_requisicao_iomat(url, params):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.header("Configurações")
+    st.header("⚙️ Configurações")
     chave_openai = st.text_input("🔑 Chave de API da OpenAI (sk-...):", type="password")
     
     st.divider()
-    st.header("Filtros da Busca")
+    st.header("🔎 Filtros da Busca")
     palavra_chave = st.text_input("Digite a palavra-chave:", value="henrique severino da cunha")
     
     # A NOVA OPÇÃO DE BUSCA EXATA
@@ -143,21 +161,31 @@ with st.sidebar:
     btn_iniciar_pipeline = st.button("🚀 Iniciar Pipeline Completo", type="primary", use_container_width=True)
 
 # =====================================================================
-# O GRANDE PIPELINE (TUDO DE UMA VEZ)
+# O GRANDE PIPELINE
 # =====================================================================
 if btn_iniciar_pipeline:
+    # --- VALIDAÇÕES ---
     if not chave_openai:
         st.error("⚠️ A Chave da OpenAI é obrigatória para rodar o pipeline completo.")
+        st.stop()
+    
+    if not chave_openai.startswith("sk-"):
+        st.error("⚠️ A chave da OpenAI parece inválida. Ela deve começar com `sk-`.")
+        st.stop()
+    
+    if not palavra_chave.strip():
+        st.error("⚠️ Digite uma palavra-chave para buscar.")
         st.stop()
         
     dados_brutos = []
     dados_relevantes = []
     dados_descartados = []
+    erros_ia = []
     
     url_busca = "https://api.iomat.mt.gov.br/busca/v1/buscas"
-    termo_url = urllib.parse.quote(palavra_chave) # Mantemos sem aspas para o link visual ficar bonito
+    termo_url = urllib.parse.quote(palavra_chave)
     
-    # O TRUQUE DE MESTRE: Envelopa em aspas para enviar à API se a Busca Exata estiver ligada
+    # Envelopa em aspas para enviar à API se a Busca Exata estiver ligada
     termo_para_api = f'"{palavra_chave}"' if busca_exata else palavra_chave
     
     anos_lista = list(range(ano_inicio, ano_fim + 1))
@@ -167,15 +195,13 @@ if btn_iniciar_pipeline:
     # ---------------------------------------------------------
     # FASE 1: EXTRAÇÃO
     # ---------------------------------------------------------
-    st.markdown("### 📥 FASE 1: Extração de Dados do Governo")
-    painel_status_extracao = st.empty()
-    barra_extracao = st.progress(0)
-    
-    with st.spinner('Acessando os servidores do IOMAT...'):
+    with st.status("📥 FASE 1: Extração de Dados do Governo", expanded=True) as status_fase1:
+        barra_extracao = st.progress(0)
+        painel_status_extracao = st.empty()
+        
         for idx_ano, ano_alvo in enumerate(anos_lista):
             barra_extracao.progress(idx_ano / total_anos, text=f"🔍 Baixando documentos do ano {ano_alvo}...")
             
-            # Agora enviamos termo_para_api (com aspas se necessário)
             params_iniciais = {'q': termo_para_api, 'y': ano_alvo}
             
             try:
@@ -195,7 +221,6 @@ if btn_iniciar_pipeline:
                 repeticoes_consecutivas = 0
                 
                 for pagina_atual in range(1, total_paginas + 1):
-                    # Agora enviamos termo_para_api aqui também
                     params_pagina = {'q': termo_para_api, 'y': ano_alvo, 'page': pagina_atual}
                     
                     res_pag = fazer_requisicao_iomat(url_busca, params_pagina)
@@ -249,115 +274,181 @@ if btn_iniciar_pipeline:
                 painel_status_extracao.warning(f"Erro ao acessar {ano_alvo}: {e_req}")
                 continue
 
-    barra_extracao.progress(1.0, text="Extração 100% Concluída!")
+        barra_extracao.progress(1.0, text="Extração 100% Concluída!")
+        
+        if len(dados_brutos) == 0:
+            status_fase1.update(label="📥 FASE 1: Nenhum documento encontrado", state="error")
+        else:
+            status_fase1.update(label=f"📥 FASE 1: {len(dados_brutos)} documentos extraídos ✅", state="complete", expanded=False)
     
     if len(dados_brutos) == 0:
-        painel_status_extracao.error("A extração finalizou, mas nenhum documento foi encontrado com esse termo exato.")
+        st.error("A extração finalizou, mas nenhum documento foi encontrado com esse termo.")
         st.stop()
-    else:
-        painel_status_extracao.success(f"✅ {len(dados_brutos)} documentos foram capturados! Iniciando o motor da Inteligência Artificial em 3 segundos...")
-        time.sleep(3) 
+    
+    st.toast(f"✅ {len(dados_brutos)} documentos capturados!")
+
+    # ---------------------------------------------------------
+    # ESTIMATIVA DE CUSTO
+    # ---------------------------------------------------------
+    total_docs = len(dados_brutos)
+    
+    # Processamento paralelo para contar tokens muito mais rápido
+    def processar_tokens_doc(doc):
+        # Agora estamos enviando o texto completo, então contamos o texto completo
+        return contar_tokens(doc['Texto Bruto'])
+
+    with st.spinner("Calculando estimativa de tokens..."):
+        # Usa ThreadPoolExecutor para rodar a tokenização em paralelo
+        with ThreadPoolExecutor() as executor:
+            resultados_tokens = list(executor.map(processar_tokens_doc, dados_brutos))
+            
+        tokens_totais_textos = sum(resultados_tokens)
+        
+    # Adicionamos ~350 tokens extras por documento para cobrir o prompt do sistema, 
+    # as instruções fixas e o tamanho da resposta em JSON.
+    tokens_estimados = tokens_totais_textos + (total_docs * 350)
+    
+    # Preço do gpt-4o-mini: ~$0.15 por 1 Milhão de tokens de input e $0.60 por 1M de output.
+    custo_estimado = (tokens_estimados / 1_000_000) * 0.15
+    
+    with st.expander(f"💰 Estimativa de custo: ~${custo_estimado:.4f} USD para {total_docs} documentos", expanded=False):
+        st.caption(f"Baseado em ~{tokens_estimados} tokens totais (texto real + prompt do sistema) × $0.15/1M tokens (gpt-4o-mini)")
 
     # ---------------------------------------------------------
     # FASE 2: ANÁLISE IA E DOWNLOADS
     # ---------------------------------------------------------
-    st.write("---")
-    st.markdown("### 🧠 FASE 2: Análise Cognitiva & Download de PDFs")
-    
-    barra_ia = st.progress(0)
-    log_raio_x = st.empty()
-    total_docs = len(dados_brutos)
-    
-    for idx, doc in enumerate(dados_brutos):
-        barra_ia.progress((idx + 1) / total_docs, text=f"Analisando doc {idx + 1} de {total_docs} (Ano: {doc['Ano']})...")
+    with st.status("🧠 FASE 2: Análise Cognitiva & Download de PDFs", expanded=True) as status_fase2:
+        barra_ia = st.progress(0)
+        log_raio_x = st.empty()
         
-        if modo_raio_x:
-            with log_raio_x.container():
-                st.info(f"Enviando Edição {doc['Edição']} (Pág {doc['Página']}) para a IA...")
+        # Contadores em tempo real
+        col_counter1, col_counter2, col_counter3 = st.columns(3)
+        placeholder_aprovados = col_counter1.empty()
+        placeholder_descartados = col_counter2.empty()
+        placeholder_erros = col_counter3.empty()
+        placeholder_aprovados.metric("✅ Aprovados", 0)
+        placeholder_descartados.metric("🗑️ Descartados", 0)
+        placeholder_erros.metric("⚠️ Erros", 0)
         
-        analise_ia, texto_enviado, texto_recebido, erro_ia = analisar_texto_com_ia(doc['Texto Bruto'], palavra_chave, chave_openai)
-        
-        if erro_ia:
-            st.error(f"🛑 ERRO DA IA: {erro_ia}")
-            st.stop()
+        for idx, doc in enumerate(dados_brutos):
+            barra_ia.progress((idx + 1) / total_docs, text=f"Analisando doc {idx + 1} de {total_docs} (Ano: {doc['Ano']})...")
             
-        if modo_raio_x:
-            with log_raio_x.container():
-                col1, col2 = st.columns(2)
-                with col1:
-                    with st.expander(f"📤 Texto enviado (Edição {doc['Edição']})"):
-                        st.text(texto_enviado)
-                with col2:
-                    with st.expander(f"📥 Resposta da IA (Edição {doc['Edição']})"):
-                        st.json(texto_recebido)
-                        
-        if analise_ia.get("relevante") == True:
-            if modo_raio_x: st.success(f"✅ APROVADO: {analise_ia.get('justificativa')} - Baixando PDF...")
+            if modo_raio_x:
+                with log_raio_x.container():
+                    st.info(f"🔄 Enviando Edição {doc['Edição']} (Pág {doc['Página']}) para a IA...")
             
-            caminho_pdf = baixar_pdf_pagina(doc['Tipo_Edicao'], doc['ID_Edicao'], doc['Página'], doc['Ano'])
+            analise_ia, texto_enviado, texto_recebido, erro_ia = analisar_texto_com_ia(doc['Texto Bruto'], palavra_chave, chave_openai)
             
-            cursor = conn_db.cursor()
-            cursor.execute('''
-                INSERT INTO documentos (ano, data_pub, edicao, pagina, link_oficial, termo_buscado, tipo_ato, justificativa, texto_bruto, caminho_pdf)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (doc['Ano'], doc['Data'], doc['Edição'], doc['Página'], doc['Link'], palavra_chave, analise_ia.get("tipo_ato"), analise_ia.get("justificativa"), doc['Texto Bruto'], caminho_pdf))
-            conn_db.commit()
+            # Em vez de parar o pipeline inteiro, pula o documento com erro
+            if erro_ia:
+                if modo_raio_x:
+                    st.warning(f"⚠️ Erro na IA para Edição {doc['Edição']} (Pág {doc['Página']}): {erro_ia}. Pulando...")
+                erros_ia.append({"Ano": doc['Ano'], "Edição": doc['Edição'], "Erro": erro_ia})
+                dados_descartados.append({
+                    "Ano": doc['Ano'],
+                    "Edição": doc['Edição'],
+                    "Motivo (IA)": f"Erro: {erro_ia}"
+                })
+                placeholder_erros.metric("⚠️ Erros", len(erros_ia))
+                placeholder_descartados.metric("🗑️ Descartados", len(dados_descartados))
+                continue
+                
+            if modo_raio_x:
+                with log_raio_x.container():
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        with st.expander(f"📤 Texto enviado (Edição {doc['Edição']})"):
+                            st.text(texto_enviado)
+                    with col2:
+                        with st.expander(f"📥 Resposta da IA (Edição {doc['Edição']})"):
+                            st.json(texto_recebido)
+                            
+            if analise_ia.get("relevante") == True:
+                if modo_raio_x: st.success(f"✅ APROVADO: {analise_ia.get('justificativa')} - Baixando PDF...")
+                
+                caminho_pdf = baixar_pdf_pagina(doc['Tipo_Edicao'], doc['ID_Edicao'], doc['Página'], doc['Ano'])
+                
+                try:
+                    cursor = conn_db.cursor()
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO documentos (ano, data_pub, edicao, pagina, link_oficial, termo_buscado, tipo_ato, justificativa, texto_bruto, caminho_pdf)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (doc['Ano'], doc['Data'], doc['Edição'], doc['Página'], doc['Link'], palavra_chave, analise_ia.get("tipo_ato"), analise_ia.get("justificativa"), doc['Texto Bruto'], caminho_pdf))
+                    conn_db.commit()
+                except sqlite3.Error as e_db:
+                    st.warning(f"⚠️ Erro ao salvar no banco: {e_db}")
+                
+                dados_relevantes.append({
+                    "Ano": doc['Ano'],
+                    "Tipo de Ato": analise_ia.get("tipo_ato"),
+                    "Justificativa": analise_ia.get("justificativa"),
+                    "Link": doc['Link'],
+                    "Arquivo PDF": caminho_pdf,
+                    "Edição": doc['Edição'],
+                    "Página": doc['Página']
+                })
+                placeholder_aprovados.metric("✅ Aprovados", len(dados_relevantes))
+            else:
+                if modo_raio_x: st.warning(f"🗑️ DESCARTADO: {analise_ia.get('justificativa')}")
+                dados_descartados.append({
+                    "Ano": doc['Ano'],
+                    "Edição": doc['Edição'],
+                    "Motivo (IA)": analise_ia.get('justificativa')
+                })
+                placeholder_descartados.metric("🗑️ Descartados", len(dados_descartados))
             
-            dados_relevantes.append({
-                "Ano": doc['Ano'],
-                "Tipo de Ato": analise_ia.get("tipo_ato"),
-                "Justificativa": analise_ia.get("justificativa"),
-                "Link": doc['Link'],
-                "Arquivo PDF": caminho_pdf,
-                "Edição": doc['Edição'],
-                "Página": doc['Página']
-            })
-        else:
-            if modo_raio_x: st.warning(f"🗑️ DESCARTADO: {analise_ia.get('justificativa')}")
-            dados_descartados.append({
-                "Ano": doc['Ano'],
-                "Edição": doc['Edição'],
-                "Motivo (IA)": analise_ia.get('justificativa')
-            })
-        
-        time.sleep(1.5) 
-        
-    barra_ia.progress(1.0, text="Análise e Downloads 100% Concluídos!")
-    log_raio_x.empty()
+            time.sleep(0.3)  # Delay reduzido (era 1.5s)
+            
+        barra_ia.progress(1.0, text="Análise e Downloads 100% Concluídos!")
+        log_raio_x.empty()
+        status_fase2.update(label=f"🧠 FASE 2: Concluída ({len(dados_relevantes)} aprovados) ✅", state="complete", expanded=False)
 
     # ---------------------------------------------------------
     # RESULTADOS FINAIS
     # ---------------------------------------------------------
     st.write("---")
-    st.markdown("### 🎉 Pipeline Finalizado: Ouro Encontrado!")
+    st.markdown("### 🎉 Pipeline Finalizado!")
+    st.balloons()
     
-    col1, col2 = st.columns(2)
-    col1.metric("Aprovados (Com PDF Salvo)", len(dados_relevantes))
-    col2.metric("Descartados (Lixo)", len(dados_descartados))
+    col1, col2, col3 = st.columns(3)
+    col1.metric("✅ Aprovados (Com PDF)", len(dados_relevantes))
+    col2.metric("🗑️ Descartados", len(dados_descartados))
+    col3.metric("📄 Total Analisado", total_docs)
     
     if len(dados_relevantes) > 0:
         st.success("Estes documentos passaram pelo crivo rigoroso da IA. O PDF original de cada um deles foi baixado com sucesso.")
         
+        # Tabela resumo interativa
+        df_relevantes = pd.DataFrame(dados_relevantes)
+        with st.expander("📊 Tabela de Resultados Relevantes", expanded=True):
+            st.dataframe(
+                df_relevantes[["Ano", "Tipo de Ato", "Justificativa", "Edição", "Página"]],
+                use_container_width=True,
+                hide_index=True
+            )
+        
+        st.markdown("#### 📥 Downloads Individuais")
         for doc in dados_relevantes:
-            st.markdown(f"**Ano {doc['Ano']} - {doc['Tipo de Ato']}**")
-            st.write(f"📝 *{doc['Justificativa']}*")
-            
-            col_btn1, col_btn2 = st.columns([1, 4])
-            with col_btn1:
-                if doc.get('Arquivo PDF') and os.path.exists(doc['Arquivo PDF']):
-                    with open(doc['Arquivo PDF'], "rb") as file:
-                        st.download_button(
-                            label=f"📄 Abrir PDF (Pág {doc['Página']})",
-                            data=file,
-                            file_name=os.path.basename(doc['Arquivo PDF']),
-                            mime="application/pdf",
-                            key=f"dl_{doc['Edição']}_{doc['Página']}"
-                        )
-                else:
-                    st.button("❌ PDF Indisponível", disabled=True, key=f"dl_fail_{doc['Edição']}_{doc['Página']}")
-            with col_btn2:
-                st.markdown(f"[Ver página no site do IOMAT]({doc['Link']})")
-            st.divider()
+            with st.container():
+                col_info, col_pdf, col_link = st.columns([3, 1, 1])
+                with col_info:
+                    st.markdown(f"**Ano {doc['Ano']} — {doc['Tipo de Ato']}**")
+                    st.caption(f"📝 {doc['Justificativa']}")
+                with col_pdf:
+                    if doc.get('Arquivo PDF') and os.path.exists(doc['Arquivo PDF']):
+                        with open(doc['Arquivo PDF'], "rb") as file:
+                            st.download_button(
+                                label=f"📄 PDF (Pág {doc['Página']})",
+                                data=file,
+                                file_name=os.path.basename(doc['Arquivo PDF']),
+                                mime="application/pdf",
+                                key=f"dl_{doc['Edição']}_{doc['Página']}"
+                            )
+                    else:
+                        st.button("❌ Indisponível", disabled=True, key=f"dl_fail_{doc['Edição']}_{doc['Página']}")
+                with col_link:
+                    st.link_button("🔗 IOMAT", doc['Link'])
+                st.divider()
 
         if os.path.exists("documentos_relevantes.db"):
             with open("documentos_relevantes.db", "rb") as file:
@@ -367,4 +458,12 @@ if btn_iniciar_pipeline:
         
     if len(dados_descartados) > 0:
         with st.expander("🗑️ Ver lixeira da Inteligência Artificial"):
-            st.dataframe(pd.DataFrame(dados_descartados), width='stretch')
+            st.dataframe(pd.DataFrame(dados_descartados), use_container_width=True, hide_index=True)
+    
+    if len(erros_ia) > 0:
+        with st.expander(f"⚠️ Ver erros da IA ({len(erros_ia)} documentos com falha)"):
+            st.dataframe(pd.DataFrame(erros_ia), use_container_width=True, hide_index=True)
+
+    # Fecha a conexão com o banco ao final do pipeline
+    conn_db.close()
+    st.toast("🏁 Pipeline finalizado com sucesso!")
