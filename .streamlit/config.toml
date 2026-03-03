@@ -1,0 +1,24 @@
+[theme]
+# Primary accent color for interactive elements (botões coloridos, accent de carregamento)
+primaryColor = "#2E8B57"
+
+# Define o tema base da aplicação antes de aplicar as cores abaixo ("light" ou "dark")
+# 'dark' garante de vez que métricas ficarão com contrastes confortáveis e legíveis.
+base = "dark"
+
+# Background color for the main content area
+backgroundColor = "#11141A"
+
+# Background color used for the sidebar and most interactive widgets
+secondaryBackgroundColor = "#1E2530"
+
+# Text color, garante que os textos dos quadrados e dos expanders não fiquem invisíveis 
+textColor = "#E0E0E0"
+
+# Font family for all text in the app 
+font = "sans serif"
+
+[server]
+# Desativa auto-reload pra não quebrar a pipeline se você editar os arquivos enquanto baixa
+runOnSave = false
+port = 8501
