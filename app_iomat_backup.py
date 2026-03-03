@@ -1,0 +1,370 @@
+import streamlit as st
+import requests
+import pandas as pd
+import time
+import math
+import urllib.parse
+import sqlite3
+import json
+from openai import OpenAI
+import os
+
+st.set_page_config(page_title="Mineração IOMAT + IA", page_icon="🤖", layout="wide")
+
+st.title("🤖 Pipeline de Mineração IOMAT + IA")
+st.markdown("Extração Bruta (Com Busca Exata) ➡️ Classificação IA ➡️ Download de PDFs")
+
+# Cria a pasta para salvar os PDFs automaticamente se ela não existir
+if not os.path.exists("pdfs_relevantes"):
+    os.makedirs("pdfs_relevantes")
+
+# --- BANCO DE DADOS ---
+def inicializar_banco():
+    conn = sqlite3.connect("documentos_relevantes.db")
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS documentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ano INTEGER,
+            data_pub TEXT,
+            edicao TEXT,
+            pagina INTEGER,
+            link_oficial TEXT,
+            termo_buscado TEXT,
+            tipo_ato TEXT,
+            justificativa TEXT,
+            texto_bruto TEXT
+        )
+    ''')
+    try:
+        cursor.execute("ALTER TABLE documentos ADD COLUMN caminho_pdf TEXT")
+    except:
+        pass 
+    conn.commit()
+    return conn
+
+conn_db = inicializar_banco()
+
+# --- FUNÇÃO DE DOWNLOAD DO PDF ---
+def baixar_pdf_pagina(tipo_edicao, edicao_id, numero_pagina, ano):
+    url = f"https://api.iomat.mt.gov.br/transparencia/v1/diarios/{tipo_edicao}/edicoes/{edicao_id}/paginas/{numero_pagina}"
+    params = {'formato': 'pdf'}
+    headers = {
+        "accept": "application/pdf", 
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    
+    try:
+        res = requests.get(url, params=params, headers=headers, timeout=20)
+        if res.status_code == 200 and 'pdf' in res.headers.get('Content-Type', '').lower():
+            caminho_arquivo = f"pdfs_relevantes/DOE_MT_{ano}_Edicao_{edicao_id}_Pagina_{numero_pagina}.pdf"
+            with open(caminho_arquivo, 'wb') as f:
+                f.write(res.content)
+            return caminho_arquivo
+        else:
+            return None
+    except Exception as e:
+        return None
+
+# --- FUNÇÃO DA IA ---
+def analisar_texto_com_ia(texto, palavra_chave, api_key):
+    client = OpenAI(api_key=api_key)
+    prompt_sistema = """Você é um pesquisador acadêmico rigoroso avaliando o Diário Oficial de Mato Grosso.
+Projeto: "Mapeamento da legislação do ensino superior tecnológico (1961-2008)".
+
+REGRAS DE CLASSIFICAÇÃO:
+- CLASSIFIQUE COMO RELEVANTE (true): Textos que tratem de criação, autorização, reconhecimento ou regulamentação de Cursos Superiores de Tecnologia, Educação Profissional, Convênios educacionais (MEC/Estado), estruturação do Conselho Estadual de Educação (CEE/MT), Secretaria de Educação (SEC/SEDUC), UNEMAT ou Escola Técnica Federal. Procure por Atos legais (Leis, Decretos, Portarias, Resoluções).
+- CLASSIFIQUE COMO IRRELEVANTE (false): Pregões, licitações, contratos de compra, nomeação de servidores comuns, avisos de início de aulas sem peso legal, balanços ou menções casuais.
+
+Responda EXCLUSIVAMENTE em JSON:
+{
+  "relevante": true ou false,
+  "tipo_ato": "string (ex: Lei, Decreto, Portaria, Licitação, Citação Casual)",
+  "justificativa": "string (motivo curto da classificação)"
+}"""
+    
+    texto_limpo = texto[:5000]
+    prompt_usuario = f"Palavra-chave: '{palavra_chave}'.\n\nTexto:\n{texto_limpo}" 
+
+    for tentativa in range(3):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                response_format={ "type": "json_object" },
+                messages=[{"role": "system", "content": prompt_sistema}, {"role": "user", "content": prompt_usuario}],
+                temperature=0.0 
+            )
+            resposta_crua = response.choices[0].message.content
+            return json.loads(resposta_crua), prompt_usuario, resposta_crua, None
+        except Exception as e:
+            if "Rate limit" in str(e) or "429" in str(e):
+                time.sleep(3)
+            else:
+                return None, None, None, str(e)
+    return None, None, None, "Limite da OpenAI excedido repetidamente."
+
+# --- FUNÇÃO DE REQUISIÇÃO BLINDADA ---
+def fazer_requisicao_iomat(url, params):
+    headers = {
+        "accept": "application/json", 
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Connection": "keep-alive"
+    }
+    for tentativa in range(3):
+        try:
+            res = requests.get(url, params=params, headers=headers, timeout=20)
+            res.raise_for_status()
+            return res
+        except requests.exceptions.ConnectionError:
+            if tentativa < 2:
+                time.sleep(5) 
+            else:
+                raise Exception("O firewall do IOMAT bloqueou seu IP.")
+        except Exception as e:
+            raise e
+
+# --- SIDEBAR ---
+with st.sidebar:
+    st.header("Configurações")
+    chave_openai = st.text_input("🔑 Chave de API da OpenAI (sk-...):", type="password")
+    
+    st.divider()
+    st.header("Filtros da Busca")
+    palavra_chave = st.text_input("Digite a palavra-chave:", value="henrique severino da cunha")
+    
+    # A NOVA OPÇÃO DE BUSCA EXATA
+    busca_exata = st.checkbox("🎯 Busca Exata (Frase completa)", value=True, help="Se marcado, busca exatamente as palavras juntas na mesma ordem.")
+    
+    ano_inicio, ano_fim = st.slider("Selecione a faixa de anos:", 1967, 2026, (2000, 2026))
+    
+    modo_raio_x = st.checkbox("🕵️ Ativar Modo Raio-X", value=True)
+    
+    st.divider()
+    btn_iniciar_pipeline = st.button("🚀 Iniciar Pipeline Completo", type="primary", use_container_width=True)
+
+# =====================================================================
+# O GRANDE PIPELINE (TUDO DE UMA VEZ)
+# =====================================================================
+if btn_iniciar_pipeline:
+    if not chave_openai:
+        st.error("⚠️ A Chave da OpenAI é obrigatória para rodar o pipeline completo.")
+        st.stop()
+        
+    dados_brutos = []
+    dados_relevantes = []
+    dados_descartados = []
+    
+    url_busca = "https://api.iomat.mt.gov.br/busca/v1/buscas"
+    termo_url = urllib.parse.quote(palavra_chave) # Mantemos sem aspas para o link visual ficar bonito
+    
+    # O TRUQUE DE MESTRE: Envelopa em aspas para enviar à API se a Busca Exata estiver ligada
+    termo_para_api = f'"{palavra_chave}"' if busca_exata else palavra_chave
+    
+    anos_lista = list(range(ano_inicio, ano_fim + 1))
+    total_anos = len(anos_lista)
+    documentos_processados = set()
+
+    # ---------------------------------------------------------
+    # FASE 1: EXTRAÇÃO
+    # ---------------------------------------------------------
+    st.markdown("### 📥 FASE 1: Extração de Dados do Governo")
+    painel_status_extracao = st.empty()
+    barra_extracao = st.progress(0)
+    
+    with st.spinner('Acessando os servidores do IOMAT...'):
+        for idx_ano, ano_alvo in enumerate(anos_lista):
+            barra_extracao.progress(idx_ano / total_anos, text=f"🔍 Baixando documentos do ano {ano_alvo}...")
+            
+            # Agora enviamos termo_para_api (com aspas se necessário)
+            params_iniciais = {'q': termo_para_api, 'y': ano_alvo}
+            
+            try:
+                res_inicial = fazer_requisicao_iomat(url_busca, params_iniciais)
+                json_resp = res_inicial.json()
+                es_data = json_resp.get('data', [{}])[0] if 'data' in json_resp else json_resp
+                
+                total_enc = es_data.get('hits', {}).get('total', 0)
+                if isinstance(total_enc, dict): total_enc = total_enc.get('value', 0)
+                
+                if total_enc == 0: continue 
+                
+                tamanho_pagina = 10 
+                total_paginas = math.ceil(total_enc / tamanho_pagina)
+                if total_paginas > 200: total_paginas = 200 
+                
+                repeticoes_consecutivas = 0
+                
+                for pagina_atual in range(1, total_paginas + 1):
+                    # Agora enviamos termo_para_api aqui também
+                    params_pagina = {'q': termo_para_api, 'y': ano_alvo, 'page': pagina_atual}
+                    
+                    res_pag = fazer_requisicao_iomat(url_busca, params_pagina)
+                    json_pag = res_pag.json()
+                    dados_pag = json_pag.get('data', [{}])[0] if 'data' in json_pag else json_pag
+                    
+                    lista_docs = dados_pag.get('hits', {}).get('hits', [])
+                    if not lista_docs: break 
+                    
+                    documentos_novos_na_pagina = 0
+                    
+                    for item in lista_docs:
+                        source = item.get('_source', {})
+                        edicao_id = source.get('diario_id') 
+                        pagina_doc = source.get('pagina')
+                        tipo_edicao = source.get('tipo_edicao', 1) 
+                        
+                        id_unico = f"{edicao_id}_{pagina_doc}"
+                        if id_unico in documentos_processados: continue
+                            
+                        documentos_processados.add(id_unico)
+                        documentos_novos_na_pagina += 1
+                        
+                        ano_doc = int(source.get('year', 0))
+                        data_pub = source.get('data', '')
+                        url_iomat = f"https://iomat.mt.gov.br/portal/visualizacoes/pdf/{edicao_id}#/p:{pagina_doc}/e:{edicao_id}?find={termo_url}"
+                        texto_bruto = source.get('conteudo', '')
+                        texto_conteudo = texto_bruto[0] if isinstance(texto_bruto, list) else texto_bruto
+                        nome_edicao = item.get('suplemento', f"{edicao_id}")
+                        
+                        dados_brutos.append({
+                            "Ano": ano_doc,
+                            "Data": data_pub,
+                            "Edição": nome_edicao,
+                            "ID_Edicao": edicao_id, 
+                            "Tipo_Edicao": tipo_edicao,
+                            "Página": pagina_doc,
+                            "Link": url_iomat,
+                            "Texto Bruto": texto_conteudo
+                        })
+                    
+                    if documentos_novos_na_pagina == 0:
+                        repeticoes_consecutivas += 1
+                    else:
+                        repeticoes_consecutivas = 0
+                        
+                    if repeticoes_consecutivas >= 3: break 
+                    time.sleep(0.5) 
+                
+            except Exception as e_req:
+                painel_status_extracao.warning(f"Erro ao acessar {ano_alvo}: {e_req}")
+                continue
+
+    barra_extracao.progress(1.0, text="Extração 100% Concluída!")
+    
+    if len(dados_brutos) == 0:
+        painel_status_extracao.error("A extração finalizou, mas nenhum documento foi encontrado com esse termo exato.")
+        st.stop()
+    else:
+        painel_status_extracao.success(f"✅ {len(dados_brutos)} documentos foram capturados! Iniciando o motor da Inteligência Artificial em 3 segundos...")
+        time.sleep(3) 
+
+    # ---------------------------------------------------------
+    # FASE 2: ANÁLISE IA E DOWNLOADS
+    # ---------------------------------------------------------
+    st.write("---")
+    st.markdown("### 🧠 FASE 2: Análise Cognitiva & Download de PDFs")
+    
+    barra_ia = st.progress(0)
+    log_raio_x = st.empty()
+    total_docs = len(dados_brutos)
+    
+    for idx, doc in enumerate(dados_brutos):
+        barra_ia.progress((idx + 1) / total_docs, text=f"Analisando doc {idx + 1} de {total_docs} (Ano: {doc['Ano']})...")
+        
+        if modo_raio_x:
+            with log_raio_x.container():
+                st.info(f"Enviando Edição {doc['Edição']} (Pág {doc['Página']}) para a IA...")
+        
+        analise_ia, texto_enviado, texto_recebido, erro_ia = analisar_texto_com_ia(doc['Texto Bruto'], palavra_chave, chave_openai)
+        
+        if erro_ia:
+            st.error(f"🛑 ERRO DA IA: {erro_ia}")
+            st.stop()
+            
+        if modo_raio_x:
+            with log_raio_x.container():
+                col1, col2 = st.columns(2)
+                with col1:
+                    with st.expander(f"📤 Texto enviado (Edição {doc['Edição']})"):
+                        st.text(texto_enviado)
+                with col2:
+                    with st.expander(f"📥 Resposta da IA (Edição {doc['Edição']})"):
+                        st.json(texto_recebido)
+                        
+        if analise_ia.get("relevante") == True:
+            if modo_raio_x: st.success(f"✅ APROVADO: {analise_ia.get('justificativa')} - Baixando PDF...")
+            
+            caminho_pdf = baixar_pdf_pagina(doc['Tipo_Edicao'], doc['ID_Edicao'], doc['Página'], doc['Ano'])
+            
+            cursor = conn_db.cursor()
+            cursor.execute('''
+                INSERT INTO documentos (ano, data_pub, edicao, pagina, link_oficial, termo_buscado, tipo_ato, justificativa, texto_bruto, caminho_pdf)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (doc['Ano'], doc['Data'], doc['Edição'], doc['Página'], doc['Link'], palavra_chave, analise_ia.get("tipo_ato"), analise_ia.get("justificativa"), doc['Texto Bruto'], caminho_pdf))
+            conn_db.commit()
+            
+            dados_relevantes.append({
+                "Ano": doc['Ano'],
+                "Tipo de Ato": analise_ia.get("tipo_ato"),
+                "Justificativa": analise_ia.get("justificativa"),
+                "Link": doc['Link'],
+                "Arquivo PDF": caminho_pdf,
+                "Edição": doc['Edição'],
+                "Página": doc['Página']
+            })
+        else:
+            if modo_raio_x: st.warning(f"🗑️ DESCARTADO: {analise_ia.get('justificativa')}")
+            dados_descartados.append({
+                "Ano": doc['Ano'],
+                "Edição": doc['Edição'],
+                "Motivo (IA)": analise_ia.get('justificativa')
+            })
+        
+        time.sleep(1.5) 
+        
+    barra_ia.progress(1.0, text="Análise e Downloads 100% Concluídos!")
+    log_raio_x.empty()
+
+    # ---------------------------------------------------------
+    # RESULTADOS FINAIS
+    # ---------------------------------------------------------
+    st.write("---")
+    st.markdown("### 🎉 Pipeline Finalizado: Ouro Encontrado!")
+    
+    col1, col2 = st.columns(2)
+    col1.metric("Aprovados (Com PDF Salvo)", len(dados_relevantes))
+    col2.metric("Descartados (Lixo)", len(dados_descartados))
+    
+    if len(dados_relevantes) > 0:
+        st.success("Estes documentos passaram pelo crivo rigoroso da IA. O PDF original de cada um deles foi baixado com sucesso.")
+        
+        for doc in dados_relevantes:
+            st.markdown(f"**Ano {doc['Ano']} - {doc['Tipo de Ato']}**")
+            st.write(f"📝 *{doc['Justificativa']}*")
+            
+            col_btn1, col_btn2 = st.columns([1, 4])
+            with col_btn1:
+                if doc.get('Arquivo PDF') and os.path.exists(doc['Arquivo PDF']):
+                    with open(doc['Arquivo PDF'], "rb") as file:
+                        st.download_button(
+                            label=f"📄 Abrir PDF (Pág {doc['Página']})",
+                            data=file,
+                            file_name=os.path.basename(doc['Arquivo PDF']),
+                            mime="application/pdf",
+                            key=f"dl_{doc['Edição']}_{doc['Página']}"
+                        )
+                else:
+                    st.button("❌ PDF Indisponível", disabled=True, key=f"dl_fail_{doc['Edição']}_{doc['Página']}")
+            with col_btn2:
+                st.markdown(f"[Ver página no site do IOMAT]({doc['Link']})")
+            st.divider()
+
+        if os.path.exists("documentos_relevantes.db"):
+            with open("documentos_relevantes.db", "rb") as file:
+                st.download_button("💾 Baixar Banco de Dados Completo (.db)", data=file, file_name="documentos_relevantes.db", mime="application/octet-stream", type="primary", use_container_width=True)
+    else:
+        st.warning("Nenhum documento atendeu aos critérios da pesquisa. Todos foram descartados pela Inteligência Artificial.")
+        
+    if len(dados_descartados) > 0:
+        with st.expander("🗑️ Ver lixeira da Inteligência Artificial"):
+            st.dataframe(pd.DataFrame(dados_descartados), width='stretch')
