@@ -467,3 +467,7 @@ if btn_iniciar_pipeline:
     # Fecha a conexão com o banco ao final do pipeline
     conn_db.close()
     st.toast("🏁 Pipeline finalizado com sucesso!")
+
+
+
+    #código bolado
