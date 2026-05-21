@@ -1,0 +1,81 @@
+{% load humanize_duracao %}
+{# Uma linha da esteira. Requer {st} = PipelineStage #}
+{% with running=st.estado|stringformat:"s" %}
+<div style="
+  display:grid;
+  grid-template-columns: 32px minmax(180px, 1fr) 2fr 110px 70px;
+  gap:12px; align-items:center;
+  padding:10px 12px;
+  border-top:1px solid var(--t-rule);
+  {% if st.estado == 'running' %}background: color-mix(in oklab, var(--t-accent) 5%, var(--t-surface));{% endif %}
+  {% if forloop.first %}border-top:0;{% endif %}
+  font-size:12px;
+">
+  {# 1. Numero da ordem #}
+  <div class="t-mono" style="font-size:11px; color:var(--t-ink-3); text-align:center;">
+    {{ st.ordem }}
+  </div>
+
+  {# 2. Nome + detalhe + tag do agente #}
+  <div style="min-width:0;">
+    <div style="display:flex; align-items:center; gap:6px;">
+      <span style="font-weight:600; color:var(--t-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        {{ st.nome }}
+      </span>
+      {% if st.agente == 'AI' %}
+        {% include "_partials/_ai_tag.html" %}
+      {% elif st.agente == 'HUM' %}
+        {% include "_partials/_hum_tag.html" %}
+      {% else %}
+        <span class="t-pill t-pill-neutral t-mono" style="font-size:9px;">SYS</span>
+      {% endif %}
+    </div>
+    {% if st.detalhe or st.mensagem %}
+      <p class="t-mono" style="font-size:10px; color:var(--t-ink-3); margin:2px 0 0;
+                                white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        {{ st.mensagem|default:st.detalhe }}
+      </p>
+    {% endif %}
+  </div>
+
+  {# 3. Barra de progresso + estado #}
+  <div>
+    <div style="display:flex; justify-content:space-between; font-size:10px;
+                color:var(--t-ink-3); margin-bottom:3px;">
+      <span class="t-mono">
+        {% if st.itens_total %}{{ st.itens_feitos }} / {{ st.itens_total }}{% else %}—{% endif %}
+      </span>
+      <span class="t-mono">
+        {% if st.estado == 'done' %}
+          <span style="color:var(--t-ok);">concluida</span>
+        {% elif st.estado == 'running' %}
+          <span style="color:var(--t-accent);">em execucao</span>
+        {% elif st.estado == 'failed' %}
+          <span style="color:var(--t-err);">falhou</span>
+        {% elif st.estado == 'skipped' %}
+          <span style="color:var(--t-ink-3);">pulada</span>
+        {% else %}
+          <span style="color:var(--t-ink-3);">na fila</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="t-progress" style="height:4px;">
+      <div style="width: {{ st.percentual }}%;
+        {% if st.estado == 'failed' %}background:var(--t-err);{% endif %}
+        {% if st.estado == 'skipped' %}background:var(--t-ink-3); opacity:0.4;{% endif %}
+        {% if st.estado == 'done' %}background:var(--t-ok);{% endif %}
+      "></div>
+    </div>
+  </div>
+
+  {# 4. Inicio #}
+  <div class="t-mono" style="font-size:10px; color:var(--t-ink-3); text-align:right;">
+    {% if st.started_at %}{{ st.started_at|date:"H:i:s" }}{% else %}—{% endif %}
+  </div>
+
+  {# 5. Duracao #}
+  <div class="t-mono" style="font-size:10px; color:var(--t-ink-3); text-align:right;">
+    {{ st.duracao_segundos|humanize_duracao|default:"—" }}
+  </div>
+</div>
+{% endwith %}

@@ -1,0 +1,60 @@
+{# Sidebar tech. Uso: {% include "_partials/_sidebar.html" with active="painel" %} #}
+{% load static %}
+<aside class="app-sidebar tech-sidebar">
+  <div class="tech-sidebar-header">
+    <div class="tech-logo">I</div>
+    <div>
+      <div class="tech-product-name">IOMAT Mineracao</div>
+      <div class="tech-product-sub">
+        v0.2 ·
+        {% if user.is_authenticated %}{{ user.username }}{% else %}visitante{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if user.is_authenticated %}
+    <div>
+      <div class="tech-nav-section-title">Principal</div>
+      <a class="tech-nav-item {% if active == 'painel' %}active{% endif %}" href="{% url 'dashboard:home' %}">
+        <span class="tech-nav-dot accent"></span> Painel
+        <span class="tech-nav-kbd">G P</span>
+      </a>
+      <a class="tech-nav-item {% if active == 'buscas' %}active{% endif %}" href="{% url 'searches:list' %}">
+        <span class="tech-nav-dot ok"></span> Buscas
+        <span class="tech-nav-kbd">G B</span>
+      </a>
+      <a class="tech-nav-item {% if active == 'documentos' %}active{% endif %}" href="{% url 'documents:list' %}">
+        <span class="tech-nav-dot"></span> Documentos
+        <span class="tech-nav-kbd">G D</span>
+      </a>
+      <a class="tech-nav-item {% if active == 'revisao' %}active{% endif %}" href="{% url 'reviews:queue' %}">
+        <span class="tech-nav-dot warn"></span> Revisao
+        <span class="tech-nav-kbd">G R</span>
+      </a>
+      <a class="tech-nav-item {% if active == 'validacao' %}active{% endif %}" href="{% url 'validations:config' %}">
+        <span class="tech-nav-dot" style="background:var(--t-ai);"></span> Validacao
+        <span class="tech-nav-kbd">G V</span>
+      </a>
+    </div>
+
+    <div>
+      <div class="tech-nav-section-title">Conta</div>
+      <a class="tech-nav-item {% if active == 'perfil' %}active{% endif %}" href="{% url 'accounts:profile' %}">Perfil</a>
+      <form method="post" action="{% url 'accounts:logout' %}" style="margin:0">
+        {% csrf_token %}
+        <button class="tech-nav-item" style="width:100%;background:transparent;border:0;text-align:left;cursor:pointer;">Sair</button>
+      </form>
+    </div>
+  {% else %}
+    <div>
+      <div class="tech-nav-section-title">Publico</div>
+      <a class="tech-nav-item {% if active == 'publico' %}active{% endif %}" href="{% url 'public:home' %}">Pagina publica</a>
+      <a class="tech-nav-item {% if active == 'login' %}active{% endif %}" href="{% url 'accounts:login' %}">Entrar</a>
+    </div>
+  {% endif %}
+
+  <div class="tech-sidebar-footer">
+    <span>api: ok</span>
+    <span>⌘ K</span>
+  </div>
+</aside>

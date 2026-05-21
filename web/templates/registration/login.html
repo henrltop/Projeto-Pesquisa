@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Entrar - IOMAT{% endblock %}
+{% block content %}
+<div class="max-w-sm mx-auto card p-6 mt-8">
+  <h1 class="text-xl font-semibold text-slate-900 mb-4">Entrar</h1>
+  <form method="post" class="space-y-3">
+    {% csrf_token %}
+    <div>
+      <label class="form-label" for="id_username">Usuario</label>
+      <input class="form-input" id="id_username" name="username" autofocus required>
+    </div>
+    <div>
+      <label class="form-label" for="id_password">Senha</label>
+      <input class="form-input" id="id_password" name="password" type="password" required>
+    </div>
+    {% if form.errors %}
+      <p class="text-sm text-rose-700">Usuario ou senha invalidos.</p>
+    {% endif %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="btn-primary w-full justify-center">Entrar</button>
+  </form>
+</div>
+{% endblock %}

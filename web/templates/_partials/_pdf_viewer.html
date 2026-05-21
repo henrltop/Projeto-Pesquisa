@@ -1,0 +1,40 @@
+{# Uso: {% include "_partials/_pdf_viewer.html" with pdf_path=doc.caminho_pdf height="760px" viewer_id="main" %} #}
+{% with h=height|default:"760px" vid=viewer_id|default:"pdf" %}
+<div id="pdf-wrap-{{ vid }}"
+     style="overflow:auto; background:var(--t-surface-2); height:{{ h }};
+            display:flex; align-items:flex-start; justify-content:center; padding:16px;">
+  <canvas id="pdf-canvas-{{ vid }}"></canvas>
+</div>
+<script>
+!function(){
+  var wrapId='pdf-wrap-{{ vid }}', canvasId='pdf-canvas-{{ vid }}';
+  var pdfUrl='/media/{{ pdf_path|escapejs }}';
+  function loadPdfJs(src,cb){
+    if(window.pdfjsLib){cb();return;}
+    var s=document.createElement('script');s.src=src;s.onload=cb;document.head.appendChild(s);
+  }
+  loadPdfJs(
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+    function(){
+      pdfjsLib.GlobalWorkerOptions.workerSrc=
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf){
+        pdf.getPage(1).then(function(page){
+          var wrap=document.getElementById(wrapId);
+          var canvas=document.getElementById(canvasId);
+          var avail=wrap.clientWidth-32;
+          var vp0=page.getViewport({scale:1});
+          var vp=page.getViewport({scale:Math.min(avail/vp0.width,2.0)});
+          canvas.width=vp.width;
+          canvas.height=vp.height;
+          page.render({canvasContext:canvas.getContext('2d'),viewport:vp});
+        });
+      }).catch(function(){
+        document.getElementById(wrapId).innerHTML=
+          '<p style="color:var(--t-ink-3);font-size:12px;margin:auto;padding:16px;">Erro ao carregar o PDF.</p>';
+      });
+    }
+  );
+}();
+</script>
+{% endwith %}

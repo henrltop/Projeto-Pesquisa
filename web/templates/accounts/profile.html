@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Perfil - IOMAT{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-4">
+  <h1 class="text-2xl font-semibold text-slate-900">Meu perfil</h1>
+
+  <div class="card p-5">
+    <h2>Informacoes da conta</h2>
+    <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
+      <dt class="text-slate-500">Usuario</dt><dd class="text-slate-900">{{ user.username }}</dd>
+      <dt class="text-slate-500">Email</dt><dd class="text-slate-900">{{ user.email|default:"—" }}</dd>
+      <dt class="text-slate-500">Ingresso</dt><dd class="text-slate-900">{{ user.date_joined|date:"d/m/Y" }}</dd>
+    </dl>
+  </div>
+
+  <div class="card p-5">
+    <h2>Desenvolvedor</h2>
+    <p class="help-text mt-1">
+      Escolha o provedor, informe a chave e valide para listar os modelos disponiveis.
+      A chave e cifrada no banco com Fernet.
+    </p>
+
+    {% if profile.has_openai_key %}
+      <p class="mt-3 text-sm">
+        Chave atual ({{ profile.get_provider_display }}):
+        <code class="bg-slate-100 px-2 py-1 rounded">{{ profile.openai_key_masked }}</code>
+        {% if profile.modelo_selecionado %}
+          &middot; modelo:
+          <code class="bg-slate-100 px-2 py-1 rounded">{{ profile.modelo_selecionado }}</code>
+        {% endif %}
+      </p>
+    {% else %}
+      <p class="mt-3 text-sm text-amber-700">Nenhuma chave configurada ainda.</p>
+    {% endif %}
+
+    <form method="post" class="mt-4 space-y-4" id="dev-form">
+      {% csrf_token %}
+
+      <fieldset>
+        <legend class="form-label">Provedor</legend>
+        <div class="flex gap-4 mt-1" id="provider-radios">
+          {% for radio in form.provider %}
+            <label class="flex items-center gap-2 text-sm">
+              {{ radio.tag }} <span>{{ radio.choice_label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+
+      <div id="openwebui-url-box">
+        <label class="form-label" for="{{ form.openwebui_base_url.id_for_label }}">URL base do OpenWebUI</label>
+        {{ form.openwebui_base_url }}
+        <p class="help-text">{{ form.openwebui_base_url.help_text }}</p>
+        {% if form.openwebui_base_url.errors %}
+          <p class="text-sm text-rose-700 mt-1">{{ form.openwebui_base_url.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="form-label" for="{{ form.api_key.id_for_label }}">Chave de API</label>
+        {{ form.api_key }}
+        <p class="help-text">Deixe em branco para manter a chave atual.</p>
+      </div>
+
+      <div>
+        <button type="button"
+                class="btn-secondary"
+                hx-post="{% url 'accounts:validar_provedor' %}"
+                hx-include="#dev-form"
+                hx-target="#modelos-box"
+                hx-swap="innerHTML">
+          Validar & listar modelos
+        </button>
+      </div>
+
+      <div id="modelos-box"></div>
+
+      <button class="btn-primary" type="submit">Salvar</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const urlBox = document.getElementById("openwebui-url-box");
+    function toggle() {
+      const checked = document.querySelector('input[name="provider"]:checked');
+      const val = checked ? checked.value : "openai";
+      urlBox.style.display = (val === "openwebui") ? "" : "none";
+    }
+    document.querySelectorAll('input[name="provider"]').forEach(r => r.addEventListener("change", toggle));
+    toggle();
+  })();
+</script>
+{% endblock %}

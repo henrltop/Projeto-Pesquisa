@@ -1,0 +1,129 @@
+{% load humanize_duracao %}
+<div class="t-card" style="padding:16px; display:flex; flex-direction:column; gap:16px;">
+
+  {# -------- Header: status + timestamps -------- #}
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      {% include "_partials/_status_pill.html" with status=job.status label=job.get_status_display %}
+      {% if job.em_andamento %}
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%;
+                     background: var(--t-accent); box-shadow:0 0 0 0 var(--t-accent);
+                     animation: pulseDot 1.4s ease-out infinite;"></span>
+      {% endif %}
+    </div>
+    <span class="t-mono" style="font-size:11px; color:var(--t-ink-3);">
+      iniciada {{ job.created_at|date:"d/m/Y H:i" }}
+    </span>
+  </div>
+
+  {# -------- Fase atual destacada -------- #}
+  {% if job.fase_atual %}
+    <div style="padding:10px 12px; border:1px solid var(--t-rule);
+                background: color-mix(in oklab, var(--t-accent) 8%, var(--t-surface));
+                border-radius:6px;">
+      <p style="font-size:12px; font-weight:600; color:var(--t-ink); margin:0;">
+        {{ job.fase_atual }}
+      </p>
+      {% if job.mensagem_progresso %}
+        <p class="t-mono" style="font-size:11px; color:var(--t-ink-2); margin:2px 0 0;">
+          {{ job.mensagem_progresso }}
+        </p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# -------- KPIs principais -------- #}
+  <div class="kpi-row" style="display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+                               border:1px solid var(--t-rule); border-radius:6px; overflow:hidden;">
+    {% include "_partials/_kpi_card.html" with label="Ano em processo"  value=job.ano_atual|default:"—" %}
+    {% include "_partials/_kpi_card.html" with label="Documento"        value=job.doc_atual sub=job.total_extraidos|stringformat:"s"|add:" total" %}
+    {% include "_partials/_kpi_card.html" with label="Decorrido"        value=job.duracao_segundos|humanize_duracao|default:"—" %}
+    {% include "_partials/_kpi_card.html" with label="ETA"              value=job.eta_segundos|humanize_duracao|default:"—" %}
+  </div>
+
+  {# -------- Progresso geral (classificacao) -------- #}
+  {% if job.total_extraidos %}
+  <div>
+    <div class="t-mono" style="display:flex; justify-content:space-between; font-size:11px;
+                                color:var(--t-ink-2); margin-bottom:4px;">
+      <span>{{ job.total_processados }} / {{ job.total_extraidos }} classificados</span>
+      <span>{{ job.percentual }}%</span>
+    </div>
+    <div class="t-progress"><div style="width: {{ job.percentual }}%;"></div></div>
+  </div>
+  {% endif %}
+
+  {# -------- Pipeline em esteira (6 etapas) -------- #}
+  <div>
+    <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                              color:var(--t-ink-3); margin:0 0 8px;">
+      Pipeline
+    </p>
+    <div style="display:flex; flex-direction:column; border:1px solid var(--t-rule); border-radius:6px; overflow:hidden;">
+      {% for st in job.stages.all %}
+        {% include "searches/_stage_row.html" with st=st %}
+      {% empty %}
+        <div style="padding:12px; font-size:12px; color:var(--t-ink-3);">
+          Esteira ainda nao foi criada.
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# -------- Contadores finais -------- #}
+  <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:8px;">
+    <div class="t-card" style="padding:10px; text-align:center;">
+      <p style="font-size:10px; color:var(--t-ink-3); margin:0;">Extraidos</p>
+      <p class="t-mono" style="font-size:18px; font-weight:600; margin:2px 0 0;">{{ job.total_extraidos }}</p>
+    </div>
+    <div class="t-card" style="padding:10px; text-align:center;">
+      <p style="font-size:10px; color:var(--t-ink-3); margin:0;">Relevantes</p>
+      <p class="t-mono" style="font-size:18px; font-weight:600; color:var(--t-ok); margin:2px 0 0;">{{ job.total_relevantes }}</p>
+    </div>
+    <div class="t-card" style="padding:10px; text-align:center;">
+      <p style="font-size:10px; color:var(--t-ink-3); margin:0;">Duvidosos</p>
+      <p class="t-mono" style="font-size:18px; font-weight:600; color:var(--t-warn); margin:2px 0 0;">{{ job.total_duvidosos }}</p>
+    </div>
+    <div class="t-card" style="padding:10px; text-align:center;">
+      <p style="font-size:10px; color:var(--t-ink-3); margin:0;">Descartados</p>
+      <p class="t-mono" style="font-size:18px; font-weight:600; color:var(--t-ink-2); margin:2px 0 0;">{{ job.total_descartados }}</p>
+    </div>
+    <div class="t-card" style="padding:10px; text-align:center;">
+      <p style="font-size:10px; color:var(--t-ink-3); margin:0;">Erros</p>
+      <p class="t-mono" style="font-size:18px; font-weight:600; color:var(--t-err); margin:2px 0 0;">{{ job.total_erros }}</p>
+    </div>
+  </div>
+
+  {% if job.custo_estimado_usd %}
+    <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:0;">
+      Custo estimado: US$ {{ job.custo_estimado_usd }}
+    </p>
+  {% endif %}
+
+  {% if job.mensagem_erro %}
+    <div style="padding:10px 12px; font-size:12px;
+                border:1px solid color-mix(in oklab, var(--t-err) 40%, var(--t-rule));
+                background:color-mix(in oklab, var(--t-err) 8%, var(--t-surface));
+                color:var(--t-ink); border-radius:6px;">
+      <strong>Erro:</strong> {{ job.mensagem_erro }}
+    </div>
+  {% endif %}
+
+  {% if job.status == 'concluido' %}
+    <div style="display:flex; gap:8px; padding-top:4px;">
+      <a class="t-btn t-btn-ghost" href="{% url 'documents:list' %}?q={{ job.termo }}">Ver documentos</a>
+      {% if job.total_duvidosos %}
+        <a class="t-btn t-btn-primary" href="{% url 'reviews:queue' %}">Revisar duvidosos ({{ job.total_duvidosos }})</a>
+      {% endif %}
+    </div>
+  {% endif %}
+
+</div>
+
+<style>
+@keyframes pulseDot {
+  0%   { box-shadow: 0 0 0 0   color-mix(in oklab, var(--t-accent) 40%, transparent); }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0   transparent; }
+}
+</style>

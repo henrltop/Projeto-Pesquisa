@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Revisar doc #{{ doc.id }}{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:16px;">
+
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h1 style="font-size:20px; font-weight:600; margin:0;">
+        Revisao {% include "_partials/_hum_tag.html" %}
+      </h1>
+      <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+        doc #{{ doc.id }} · {{ doc.data_pub }} · ano {{ doc.ano }}
+      </p>
+    </div>
+    <a class="t-btn t-btn-ghost" href="{% url 'reviews:queue' %}">← voltar para a fila</a>
+  </div>
+
+  <div style="display:grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap:16px; align-items:start;">
+
+    {# ---- Esquerda: conteudo do doc ---- #}
+    <div style="display:flex; flex-direction:column; gap:12px; min-width:0;">
+
+      <div class="t-card" style="padding:12px 14px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <p style="font-size:13px; font-weight:600; margin:0;">
+          {{ doc.nome_edicao|default:doc.edicao_id }}
+          <span class="t-mono" style="color:var(--t-ink-3); font-weight:500;">/ pag {{ doc.pagina }}</span>
+        </p>
+        <div style="display:flex; gap:6px;">
+          {% if doc.link_oficial %}<a class="t-btn t-btn-ghost" target="_blank" href="{{ doc.link_oficial }}">IOMAT</a>{% endif %}
+          {% if doc.caminho_pdf %}<a class="t-btn t-btn-ghost" target="_blank" href="/media/{{ doc.caminho_pdf }}">PDF em nova aba</a>{% endif %}
+        </div>
+      </div>
+
+      {% if doc.caminho_pdf %}
+        <div class="t-card" style="padding:0; overflow:hidden;">
+          {% include "_partials/_pdf_viewer.html" with pdf_path=doc.caminho_pdf height="640px" viewer_id="review" %}
+        </div>
+      {% endif %}
+
+      <div class="t-card" style="padding:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 8px;">
+          <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                    color:var(--t-ink-3); margin:0;">Texto bruto</p>
+          <button id="btn-copiar" class="t-btn t-btn-ghost" style="font-size:10px; padding:2px 8px;"
+                  onclick="navigator.clipboard.writeText(document.getElementById('texto-bruto').textContent).then(function(){var b=document.getElementById('btn-copiar');b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar texto'},1500)})">Copiar texto</button>
+        </div>
+        <pre id="texto-bruto" class="t-mono" style="font-size:11px; line-height:1.55; color:var(--t-ink-2);
+                                    max-height:280px; overflow:auto; white-space:pre-wrap;
+                                    margin:0; padding:8px; background:var(--t-surface-2);
+                                    border:1px solid var(--t-rule); border-radius:4px;">{{ doc.texto_bruto }}</pre>
+      </div>
+    </div>
+
+    {# ---- Direita: IA + formulario ---- #}
+    <div style="display:flex; flex-direction:column; gap:12px;">
+
+      <div class="t-card">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0 0 10px;">
+          Classificacao IA {% include "_partials/_ai_tag.html" %}
+        </p>
+        {% if classificacao_atual %}
+          {% include "_partials/_status_pill.html" with status=classificacao_atual.classificacao label=classificacao_atual.get_classificacao_display %}
+          <p style="font-size:13px; font-weight:600; margin:8px 0 0;">{{ classificacao_atual.tipo_ato }}</p>
+          <p style="font-size:11px; color:var(--t-ink-2); margin:6px 0 0;">{{ classificacao_atual.justificativa }}</p>
+          <p class="t-mono" style="font-size:10px; color:var(--t-ink-3); margin:8px 0 0;">
+            {{ classificacao_atual.modelo_ia }} · {{ classificacao_atual.created_at|date:"d/m H:i" }}
+          </p>
+        {% else %}
+          <p style="font-size:12px; color:var(--t-ink-3); margin:0;">Sem classificacao registrada.</p>
+        {% endif %}
+      </div>
+
+      <form method="post" class="t-card" id="review-form" style="display:flex; flex-direction:column; gap:12px;">
+        {% csrf_token %}
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0;">
+          {% if existente %}Atualizar revisao{% else %}Minha revisao{% endif %}
+        </p>
+
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          {% for radio in form.decisao %}
+            <label style="display:flex; align-items:center; gap:8px; padding:8px 10px;
+                          border:1px solid var(--t-rule); border-radius:6px; cursor:pointer;
+                          font-size:13px; color:var(--t-ink-2);">
+              {{ radio.tag }}
+              <span>{{ radio.choice_label }}</span>
+              <span class="t-mono" style="margin-left:auto; font-size:9px; color:var(--t-ink-3);">
+                {% if forloop.counter == 1 %}E{% elif forloop.counter == 2 %}R{% elif forloop.counter == 3 %}S{% else %}I{% endif %}
+              </span>
+            </label>
+          {% endfor %}
+          {% if form.decisao.errors %}
+            <p class="t-mono" style="font-size:11px; color:var(--t-err); margin:0;">{{ form.decisao.errors.0 }}</p>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="t-label">Comentario</label>
+          {{ form.comentario }}
+        </div>
+
+        <button class="t-btn t-btn-primary" style="justify-content:center; padding:8px;">
+          Salvar revisao <span class="t-mono" style="font-size:10px; opacity:0.6; margin-left:4px;">(Space)</span>
+        </button>
+      </form>
+
+      <div class="t-card" style="padding:10px 12px;">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0 0 6px;">Atalhos</p>
+        <div class="t-mono" style="font-size:10px; color:var(--t-ink-2); line-height:1.7;">
+          <kbd style="border:1px solid var(--t-rule); padding:1px 5px; border-radius:3px;">E</kbd> super relevante &nbsp;
+          <kbd style="border:1px solid var(--t-rule); padding:1px 5px; border-radius:3px;">R</kbd> aprovar &nbsp;
+          <kbd style="border:1px solid var(--t-rule); padding:1px 5px; border-radius:3px;">S</kbd> ressalva &nbsp;
+          <kbd style="border:1px solid var(--t-rule); padding:1px 5px; border-radius:3px;">I</kbd> rejeitar<br>
+          <kbd style="border:1px solid var(--t-rule); padding:1px 5px; border-radius:3px;">Space</kbd> salvar
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // Atalhos R/I/D: seleciona o radio correspondente. Space: submit.
+  document.addEventListener("keydown", function(ev){
+    var tag = (ev.target.tagName || "").toLowerCase();
+    if (ev.target.isContentEditable || tag === "input" || tag === "textarea" || tag === "select") return;
+    var radios = document.querySelectorAll('#review-form input[type=radio]');
+    var map = { e: 0, r: 1, s: 2, i: 3 };
+    var k = ev.key.toLowerCase();
+    if (k in map && radios[map[k]]) { ev.preventDefault(); radios[map[k]].checked = true; radios[map[k]].dispatchEvent(new Event("change")); }
+    if (ev.key === " ") {
+      var selected = document.querySelector('#review-form input[type=radio]:checked');
+      if (selected) { ev.preventDefault(); document.getElementById("review-form").submit(); }
+    }
+  });
+})();
+</script>
+{% endblock %}

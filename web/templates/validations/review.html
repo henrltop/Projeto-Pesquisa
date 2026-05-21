@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Validacao cega #{{ session.pk }} - IOMAT{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:16px;">
+
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h1 style="font-size:20px; font-weight:600; margin:0;">Validacao cega</h1>
+      <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+        sessao #{{ session.pk }} · documento {{ avaliados|add:1 }}/{{ total }}
+      </p>
+    </div>
+    <a class="t-btn t-btn-ghost" href="{% url 'validations:config' %}">← voltar</a>
+  </div>
+
+  {# ---- Revelacao do item anterior ---- #}
+  {% if item_revelado %}
+    <div class="t-card" style="border-left:3px solid {% if item_revelado.concordancia %}var(--t-ok){% else %}var(--t-err){% endif %};">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 8px;">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0;">
+          Resultado do documento anterior (item #{{ item_revelado.ordem }})
+        </p>
+        {% if item_revelado.concordancia %}
+          <span class="t-pill done"><span class="t-pill-dot"></span><span>Concordante</span></span>
+        {% else %}
+          <span class="t-pill failed"><span class="t-pill-dot"></span><span>Divergente</span></span>
+        {% endif %}
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div style="padding:10px; background:var(--t-surface-2); border-radius:4px;">
+          <p class="t-mono" style="font-size:9px; text-transform:uppercase; color:var(--t-ink-3); margin:0 0 4px;">
+            Classificacao IA {% include "_partials/_ai_tag.html" %}
+          </p>
+          <p style="font-size:13px; font-weight:600; margin:0;">
+            {{ item_revelado.get_categoria_ia_display|default:item_revelado.categoria_ia }}
+          </p>
+          {% if item_revelado.tipo_ato_ia %}
+            <p style="font-size:11px; color:var(--t-ink-2); margin:4px 0 0;">{{ item_revelado.tipo_ato_ia }}</p>
+          {% endif %}
+          {% if item_revelado.justificativa_ia %}
+            <p style="font-size:10px; color:var(--t-ink-3); margin:4px 0 0;">{{ item_revelado.justificativa_ia }}</p>
+          {% endif %}
+        </div>
+        <div style="padding:10px; background:var(--t-surface-2); border-radius:4px;">
+          <p class="t-mono" style="font-size:9px; text-transform:uppercase; color:var(--t-ink-3); margin:0 0 4px;">
+            Seu voto {% include "_partials/_hum_tag.html" %}
+          </p>
+          <p style="font-size:13px; font-weight:600; margin:0;">
+            {{ item_revelado.get_decisao_humana_display }}
+          </p>
+          {% if item_revelado.observacao %}
+            <p style="font-size:10px; color:var(--t-ink-3); margin:4px 0 0;">{{ item_revelado.observacao|truncatechars:120 }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div style="display:grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap:16px; align-items:start;">
+
+    {# ---- Esquerda: texto do documento ---- #}
+    <div style="display:flex; flex-direction:column; gap:12px; min-width:0;">
+
+      <div class="t-card" style="padding:12px 14px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <p style="font-size:13px; font-weight:600; margin:0;">
+          Ano {{ doc.ano }}
+          <span class="t-mono" style="color:var(--t-ink-3); font-weight:500;">
+            · edicao {{ doc.edicao_id }} · pag {{ doc.pagina }}
+          </span>
+        </p>
+      </div>
+
+      <div class="t-card" style="padding:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 8px;">
+          <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                    color:var(--t-ink-3); margin:0;">Texto bruto</p>
+          <button id="btn-copiar" class="t-btn t-btn-ghost" style="font-size:10px; padding:2px 8px;"
+                  onclick="navigator.clipboard.writeText(document.getElementById('texto-bruto').textContent).then(function(){var b=document.getElementById('btn-copiar');b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar texto'},1500)})">Copiar texto</button>
+        </div>
+        <pre id="texto-bruto" class="t-mono" style="font-size:11px; line-height:1.55; color:var(--t-ink-2);
+                                    max-height:520px; overflow:auto; white-space:pre-wrap;
+                                    margin:0; padding:8px; background:var(--t-surface-2);
+                                    border:1px solid var(--t-rule); border-radius:4px;">{{ doc.texto_bruto }}</pre>
+      </div>
+    </div>
+
+    {# ---- Direita: IA (blur) + formulario ---- #}
+    <div style="display:flex; flex-direction:column; gap:12px;">
+
+      {# Progresso #}
+      <div class="t-card" style="padding:10px 12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 6px;">
+          <p class="t-mono" style="font-size:10px; text-transform:uppercase; color:var(--t-ink-3); margin:0;">
+            Progresso
+          </p>
+          <span class="t-mono" style="font-size:11px; font-weight:600;">{{ progresso_pct }}%</span>
+        </div>
+        <div class="t-progress" style="height:4px;">
+          <div class="t-progress-bar ai" style="width:{{ progresso_pct }}%;"></div>
+        </div>
+        <p class="t-mono" style="font-size:10px; color:var(--t-ink-3); margin:4px 0 0;">
+          {{ avaliados }} de {{ total }} avaliados
+        </p>
+      </div>
+
+      {# Classificacao IA — BLUR, sem dados reais #}
+      <div class="t-card" style="position:relative; overflow:hidden;">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0 0 10px;">
+          Classificacao IA {% include "_partials/_ai_tag.html" %}
+        </p>
+        <div style="filter:blur(8px); user-select:none; pointer-events:none;">
+          <span class="t-pill queued"><span class="t-pill-dot"></span><span>██████████</span></span>
+          <p style="font-size:13px; font-weight:600; margin:8px 0 0;">████████ ██████</p>
+          <p style="font-size:11px; color:var(--t-ink-2); margin:6px 0 0;">
+            ████████ ██ ████████ ██████ ██ ████ ██████ ████████ ██ ██████████
+          </p>
+        </div>
+        <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
+          <span class="t-mono" style="font-size:10px; color:var(--t-ink-3); background:var(--t-surface);
+                                       padding:4px 10px; border-radius:4px; border:1px solid var(--t-rule);">
+            revelado apos seu voto
+          </span>
+        </div>
+      </div>
+
+      {# Formulario de revisao #}
+      <form method="post" class="t-card" id="review-form" style="display:flex; flex-direction:column; gap:12px;">
+        {% csrf_token %}
+        <input type="hidden" name="tempo_avaliacao_segundos" id="tempo-hidden" value="0">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0;">Sua avaliacao</p>
+
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          {% for radio in form.decisao_humana %}
+            <label style="display:flex; align-items:center; gap:8px; padding:8px 10px;
+                          border:1px solid var(--t-rule); border-radius:6px; cursor:pointer;
+                          font-size:13px; color:var(--t-ink-2);">
+              {{ radio.tag }}
+              <span>{{ radio.choice_label }}</span>
+              <span class="t-mono" style="margin-left:auto; font-size:9px; color:var(--t-ink-3);">
+                {% if forloop.counter == 1 %}E{% elif forloop.counter == 2 %}R{% elif forloop.counter == 3 %}S{% else %}I{% endif %}
+              </span>
+            </label>
+          {% endfor %}
+          {% if form.decisao_humana.errors %}
+            <p class="t-mono" style="font-size:11px; color:var(--t-err); margin:0;">{{ form.decisao_humana.errors.0 }}</p>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="t-label">Observacao (obrigatoria)</label>
+          {{ form.observacao }}
+          {% if form.observacao.errors %}
+            <p class="t-mono" style="font-size:11px; color:var(--t-err); margin:4px 0 0;">{{ form.observacao.errors.0 }}</p>
+          {% endif %}
+        </div>
+
+        <button class="t-btn t-btn-primary" style="justify-content:center; padding:8px;">
+          Confirmar voto <span class="t-mono" style="font-size:10px; opacity:0.6; margin-left:4px;">(Space)</span>
+        </button>
+      </form>
+
+      {# Atalhos #}
+      <div class="t-card" style="padding:10px 12px;">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0 0 6px;">Atalhos</p>
+        <div class="t-mono" style="font-size:10px; color:var(--t-ink-2); line-height:1.7;">
+          <kbd style="border:1px solid var(--t-rule); padding:1px 5px; border-radius:3px;">E</kbd> super relevante &nbsp;
+          <kbd style="border:1px solid var(--t-rule); padding:1px 5px; border-radius:3px;">R</kbd> aprovar &nbsp;
+          <kbd style="border:1px solid var(--t-rule); padding:1px 5px; border-radius:3px;">S</kbd> ressalva &nbsp;
+          <kbd style="border:1px solid var(--t-rule); padding:1px 5px; border-radius:3px;">I</kbd> rejeitar<br>
+          <kbd style="border:1px solid var(--t-rule); padding:1px 5px; border-radius:3px;">Space</kbd> confirmar voto
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var startTime = Date.now();
+
+  document.getElementById("review-form").addEventListener("submit", function(){
+    var seconds = Math.round((Date.now() - startTime) / 1000);
+    document.getElementById("tempo-hidden").value = seconds;
+  });
+
+  document.addEventListener("keydown", function(ev){
+    var tag = (ev.target.tagName || "").toLowerCase();
+    if (ev.target.isContentEditable || tag === "input" || tag === "textarea" || tag === "select") return;
+    var radios = document.querySelectorAll('#review-form input[type=radio]');
+    var map = { e: 0, r: 1, s: 2, i: 3 };
+    var k = ev.key.toLowerCase();
+    if (k in map && radios[map[k]]) { ev.preventDefault(); radios[map[k]].checked = true; radios[map[k]].dispatchEvent(new Event("change")); }
+    if (ev.key === " ") {
+      var selected = document.querySelector('#review-form input[type=radio]:checked');
+      if (selected) { ev.preventDefault(); document.getElementById("review-form").submit(); }
+    }
+  });
+})();
+</script>
+{% endblock %}

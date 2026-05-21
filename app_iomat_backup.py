@@ -73,13 +73,17 @@ def analisar_texto_com_ia(texto, palavra_chave, api_key):
 Projeto: "Mapeamento da legislação do ensino superior tecnológico (1961-2008)".
 
 REGRAS DE CLASSIFICAÇÃO:
-- CLASSIFIQUE COMO RELEVANTE (true): Textos que tratem de criação, autorização, reconhecimento ou regulamentação de Cursos Superiores de Tecnologia, Educação Profissional, Convênios educacionais (MEC/Estado), estruturação do Conselho Estadual de Educação (CEE/MT), Secretaria de Educação (SEC/SEDUC), UNEMAT ou Escola Técnica Federal. Procure por Atos legais (Leis, Decretos, Portarias, Resoluções).
+- CLASSIFIQUE COMO RELEVANTE (true): Textos que tratem de criação, autorização, reconhecimento ou regulamentação de Cursos Superiores de Tecnologia, Educação Profissional, Convênios educacionais (MEC/Estado), estruturação do Conselho Estadual de Educação (CEE/MT), Secretaria de Educação (SEC/SEDUC), UNEMAT ou Escola Técnica Federal. Procure por atos normativos explícitos.
 - CLASSIFIQUE COMO IRRELEVANTE (false): Pregões, licitações, contratos de compra, nomeação de servidores comuns, avisos de início de aulas sem peso legal, balanços ou menções casuais.
+
+TIPOS DE ATO ESPERADOS (use exatamente um destes quando aplicável):
+Constituição, Emenda Constitucional, Lei, Lei Complementar, Lei Ordinária, Lei Delegada, Medida Provisória, Decreto Legislativo, Decreto, Decreto-Lei, Resolução, Portaria, Instrução Normativa, Regimento, Regulamento, Estatuto, Diretrizes Curriculares, Plano.
+Se nenhum tipo se aplica (conteúdo irrelevante), use "Outro" seguido de descrição curta (ex: "Outro - Licitação").
 
 Responda EXCLUSIVAMENTE em JSON:
 {
   "relevante": true ou false,
-  "tipo_ato": "string (ex: Lei, Decreto, Portaria, Licitação, Citação Casual)",
+  "tipo_ato": "string (<tipo da lista acima>)",
   "justificativa": "string (motivo curto da classificação)"
 }"""
     

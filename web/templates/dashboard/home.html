@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Painel - IOMAT{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:20px;">
+
+  {# ---- Header ---- #}
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h1 style="font-size:20px; font-weight:600; color:var(--t-ink); margin:0;">Painel</h1>
+      <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+        visao geral da equipe · {{ user.username }}
+      </p>
+    </div>
+    <a href="{% url 'searches:new' %}" class="t-btn t-btn-primary">+ Nova busca</a>
+  </div>
+
+  {# ---- KPI row ---- #}
+  <div class="kpi-row" style="grid-template-columns:repeat(4, 1fr);">
+    {% include "_partials/_kpi_card.html" with label="Documentos processados" value=total_docs %}
+    {% include "_partials/_kpi_card.html" with label="Relevantes (IA)"        value=total_relevantes sub="classificados" %}
+    {% include "_partials/_kpi_card.html" with label="Aguardando revisao"     value=total_duvidosos_pendentes sub="duvidosos" %}
+    {% include "_partials/_kpi_card.html" with label="Revisoes humanas"       value=total_revisados sub="validadas" %}
+  </div>
+
+  {# ---- Heatmap: relevantes por tipo x ano ---- #}
+  {% if heatmap %}
+    <div class="t-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px;">
+        <div>
+          <p style="font-size:13px; font-weight:600; color:var(--t-ink); margin:0;">
+            Densidade de relevantes por ano × tipo
+          </p>
+          <p class="t-mono" style="font-size:10px; color:var(--t-ink-3); margin:3px 0 0;">
+            n={{ heatmap.total_geral }} · {{ heatmap.ano_min }}–{{ heatmap.ano_max }}
+          </p>
+        </div>
+        <div class="t-heatmap-legend">
+          <span>0</span>
+          <span class="swatch" style="background: var(--t-surface-2); border:1px solid var(--t-rule);"></span>
+          <span class="swatch" style="background: color-mix(in oklab, var(--t-accent) 28%, var(--t-surface));"></span>
+          <span class="swatch" style="background: color-mix(in oklab, var(--t-accent) 50%, var(--t-surface));"></span>
+          <span class="swatch" style="background: color-mix(in oklab, var(--t-accent) 70%, var(--t-surface));"></span>
+          <span class="swatch" style="background: var(--t-accent);"></span>
+          <span>max={{ heatmap.max_total }}</span>
+        </div>
+      </div>
+
+      <div class="t-heatmap">
+        {% for row in heatmap.rows %}
+          <div class="t-heatmap-row">
+            <div class="t-heatmap-label">{{ row.tipo }}</div>
+            <div class="t-heatmap-cells">
+              {% for cell in row.cells %}
+                <div class="t-heatmap-cell i{{ cell.intensidade }}"
+                     title="{{ row.tipo }} · {{ cell.ano }}: {{ cell.total }} relevante{{ cell.total|pluralize }}"></div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+
+        {# Eixo X: ticks de decada alinhados proporcionalmente #}
+        <div class="t-heatmap-axis">
+          <div></div>
+          <div class="ticks">
+            {% with qtd=heatmap.anos|length %}
+              {% for a in heatmap.ticks_decada %}
+                {% with i=forloop.counter0 %}{% endwith %}
+                <span class="tick"
+                      style="left: calc( ({{ a }} - {{ heatmap.ano_min }}) / {{ qtd|add:"-1" }} * 100% );">
+                  {{ a }}
+                </span>
+              {% endfor %}
+            {% endwith %}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div style="display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, 1fr); gap:16px;">
+
+    {# ---- Buscas recentes ---- #}
+    <div class="t-card" style="padding:0; overflow:hidden;">
+      <div style="display:flex; justify-content:space-between; align-items:center;
+                  padding:12px 14px; border-bottom:1px solid var(--t-rule);">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0;">Buscas recentes</p>
+        <a href="{% url 'searches:list' %}" class="t-mono"
+           style="font-size:10px; color:var(--t-accent); text-decoration:none;">ver todas →</a>
+      </div>
+      {% if buscas_recentes %}
+        <table class="t-table">
+          <thead>
+            <tr><th>Termo</th><th>Anos</th><th>Status</th><th>Por</th><th class="num">Criada</th></tr>
+          </thead>
+          <tbody>
+            {% for j in buscas_recentes %}
+              <tr>
+                <td><a href="{{ j.get_absolute_url }}" style="color:var(--t-ink); text-decoration:none; font-weight:500;">{{ j.termo }}</a></td>
+                <td class="t-mono" style="font-size:11px;">{{ j.ano_inicio }}–{{ j.ano_fim }}</td>
+                <td>{% include "_partials/_status_pill.html" with status=j.status label=j.get_status_display %}</td>
+                <td style="font-size:11px; color:var(--t-ink-3);">{{ j.criado_por.username }}</td>
+                <td class="num t-mono" style="font-size:10px; color:var(--t-ink-3);">{{ j.created_at|date:"d/m H:i" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div style="padding:24px; text-align:center; font-size:12px; color:var(--t-ink-3);">
+          Nenhuma busca ainda. <a href="{% url 'searches:new' %}" style="color:var(--t-accent);">Crie a primeira</a>.
+        </div>
+      {% endif %}
+    </div>
+
+    {# ---- Top tipos de ato ---- #}
+    <div class="t-card">
+      <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                color:var(--t-ink-3); margin:0 0 12px;">Top tipos de ato relevantes</p>
+      {% if por_tipo %}
+        <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+          {% for t in por_tipo %}
+            <li style="display:flex; justify-content:space-between; align-items:center; gap:8px;
+                       padding:6px 0; border-bottom:1px solid var(--t-rule);">
+              <span style="font-size:12px; color:var(--t-ink-2);">{{ t.tipo_ato }}</span>
+              <span class="t-mono" style="font-size:11px; color:var(--t-accent); font-weight:500;">{{ t.total }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p style="font-size:12px; color:var(--t-ink-3); margin:0;">Aguardando dados classificados.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

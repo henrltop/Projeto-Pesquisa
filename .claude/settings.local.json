@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m venv .venv)",
+      "Bash(curl -s -o /dev/null -w \"public:     %{http_code}\\\\n\" http://127.0.0.1:8765/)",
+      "Bash(curl -s -o /dev/null -w \"login:      %{http_code}\\\\n\" http://127.0.0.1:8765/contas/login/)",
+      "Bash(curl -s -o /dev/null -w \"dashboard:  %{http_code}\\\\n\" http://127.0.0.1:8765/app/ -L --max-redirs 0 -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s -o /dev/null -w \"searches:   %{http_code} \\(sem redirect\\)\\\\n\" http://127.0.0.1:8765/buscas/)",
+      "Bash(curl -s -o /dev/null -w \"admin:      %{http_code}\\\\n\" http://127.0.0.1:8765/admin/)",
+      "Bash(curl -s http://127.0.0.1:8765/)",
+      "Bash(curl -s -o /dev/null -w \"status=%{http_code}\\\\n\" http://127.0.0.1:8765/)",
+      "Bash(python manage.py makemigrations accounts)",
+      "Bash(python manage.py migrate)",
+      "Bash(ls .venv/Scripts/python.exe)",
+      "Bash(.venv/Scripts/python.exe manage.py makemigrations accounts)",
+      "Bash(.venv/Scripts/python.exe manage.py migrate)",
+      "Bash(ls -la .env)",
+      "Bash(grep -i \"FIELD_ENCRYPTION\\\\|DJANGO_SETTINGS\" .env)",
+      "Bash(.venv/Scripts/python.exe -c \"from cryptography.fernet import Fernet; print\\(Fernet.generate_key\\(\\).decode\\(\\)\\)\")",
+      "Bash(.venv/Scripts/python.exe manage.py makemigrations searches)",
+      "Bash(./.venv/Scripts/python.exe manage.py makemigrations searches)",
+      "Bash(./.venv/Scripts/python.exe manage.py migrate)",
+      "Bash(./.venv/Scripts/python.exe manage.py check)",
+      "Bash(.venv/Scripts/python.exe manage.py check)",
+      "Bash(python manage.py makemigrations searches)",
+      "Bash(where python *)",
+      "Bash(where py *)",
+      "Bash(../.venv/Scripts/python.exe manage.py makemigrations searches)",
+      "Bash(\"E:/Área de *)",
+      "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" \".\\\\web\\\\manage.py\" makemigrations searches)",
+      "PowerShell(& \"..\\\\.venv\\\\Scripts\\\\python.exe\" \".\\\\manage.py\" makemigrations searches)",
+      "PowerShell(Write-Output \\(Get-Location\\).Path; Write-Output \\(Test-Path \".venv\\\\Scripts\\\\python.exe\"\\); Write-Output \\(Test-Path \"web\\\\manage.py\"\\))",
+      "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" \".\\\\manage.py\" makemigrations searches)",
+      "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" \".\\\\manage.py\" migrate)",
+      "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" \".\\\\manage.py\" check)",
+      "PowerShell(Write-Output \\(Get-Location\\).Path; Get-ChildItem -Directory -Name)",
+      "PowerShell(& \".\\\\web\\\\.venv\\\\Scripts\\\\python.exe\" \".\\\\web\\\\manage.py\" check)"
+    ]
+  }
+}

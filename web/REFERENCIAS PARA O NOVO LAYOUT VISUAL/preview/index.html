@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>IOMAT Mineração — Redesign completo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #0f1012; font-family: 'Inter', system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+
+  .stage {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 48px; padding: 48px 24px 120px;
+    min-height: 100vh;
+  }
+  .screen-wrap {
+    width: 1400px; max-width: 100%;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04);
+    overflow: hidden;
+  }
+  .screen-label {
+    width: 1400px; max-width: 100%;
+    display: flex; justify-content: space-between; align-items: baseline;
+    color: #a0a4aa; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: -32px;
+  }
+  .screen-label strong { color: #fff; font-weight: 500; }
+
+  .toolbar {
+    position: fixed; top: 16px; right: 16px; z-index: 100;
+    background: rgba(20,22,26,0.92); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+    padding: 6px; display: flex; gap: 4px; flex-wrap: wrap; max-width: 500px;
+    font-family: 'Inter', sans-serif; font-size: 12px;
+  }
+  .toolbar button {
+    background: transparent; border: none; color: #c0c4cc;
+    padding: 6px 10px; border-radius: 5px; cursor: pointer; font-size: 12px;
+    font-family: inherit;
+  }
+  .toolbar button:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  .toolbar button.active { background: rgba(107,146,245,0.18); color: #8fabf5; }
+  .toolbar .sep { width: 1px; background: rgba(255,255,255,0.1); margin: 4px 2px; }
+
+  .nav-links {
+    position: fixed; left: 16px; top: 16px; z-index: 100;
+    background: rgba(20,22,26,0.92); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    display: flex; flex-direction: column; gap: 4px;
+    max-height: calc(100vh - 32px); overflow: auto;
+  }
+  .nav-links .label { color: #6a6e75; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; font-size: 9px; }
+  .nav-links a { color: #c0c4cc; text-decoration: none; padding: 3px 0; }
+  .nav-links a:hover { color: #8fabf5; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="variations/tech.jsx"></script>
+<script type="text/babel" src="variations/tech-screens.jsx"></script>
+
+<script type="text/babel">
+const SCREENS = [
+  { id: 'dash',         num: '01', label: 'Painel',              comp: 'TechDashboard',    h: 1300 },
+  { id: 'searches',     num: '02', label: 'Lista de buscas',     comp: 'TechSearchesList', h: 900 },
+  { id: 'new-search',   num: '03', label: 'Nova busca',          comp: 'TechNewSearch',    h: 900 },
+  { id: 'progress',     num: '04', label: 'Progresso da busca', comp: 'TechProgress',     h: 1350 },
+  { id: 'documents',    num: '05', label: 'Lista de documentos',comp: 'TechDocuments',    h: 1200 },
+  { id: 'doc-detail',   num: '06', label: 'Detalhe do documento', comp: 'TechDocumentDetail', h: 1150 },
+  { id: 'review-queue', num: '07', label: 'Fila de revisão',    comp: 'TechReviewQueue',  h: 1050 },
+  { id: 'review',       num: '08', label: 'Revisão individual', comp: 'TechReviewDetail', h: 1200 },
+];
+
+function App() {
+  const [dark, setDark] = React.useState(false);
+  const [density, setDensity] = React.useState('comfortable');
+
+  return (
+    <>
+      <nav className="nav-links">
+        <span className="label">Telas</span>
+        {SCREENS.map(s => (
+          <a key={s.id} href={`#${s.id}`}>{s.num} · {s.label}</a>
+        ))}
+      </nav>
+
+      <div className="toolbar">
+        <button className={!dark ? 'active' : ''} onClick={() => setDark(false)}>☀ Claro</button>
+        <button className={dark ? 'active' : ''} onClick={() => setDark(true)}>☾ Escuro</button>
+        <span className="sep" />
+        <button className={density === 'comfortable' ? 'active' : ''} onClick={() => setDensity('comfortable')}>Confortável</button>
+        <button className={density === 'compact' ? 'active' : ''} onClick={() => setDensity('compact')}>Compacto</button>
+      </div>
+
+      <div className="stage">
+        <div style={{ width: 1400, maxWidth: '100%' }}>
+          <h1 style={{ color: '#fff', fontSize: 28, fontWeight: 600, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+            IOMAT Mineração · Redesign completo
+          </h1>
+          <p style={{ color: '#8a8e95', fontSize: 14, margin: 0, fontFamily: 'JetBrains Mono, monospace' }}>
+            8 telas · sidebar + data-dense · pipeline AI ↔ Humano visível
+          </p>
+        </div>
+
+        {SCREENS.map(s => {
+          const Comp = window[s.comp];
+          return (
+            <React.Fragment key={s.id}>
+              <div className="screen-label" id={s.id}>
+                <span>{s.num} · {s.label}</span>
+                <strong>{s.comp}</strong>
+              </div>
+              <div className="screen-wrap" style={{ height: s.h }}>
+                <Comp dark={dark} density={density} />
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

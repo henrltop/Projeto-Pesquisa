@@ -1,0 +1,76 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}IOMAT Mineracao{% endblock %}</title>
+
+<!-- Aplica tema/densidade antes do paint para evitar flash -->
+<script>
+(function(){
+  try {
+    var t = localStorage.getItem("iomat-theme");
+    if (!t) t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+    var d = localStorage.getItem("iomat-density") || "comfortable";
+    document.documentElement.setAttribute("data-density", d);
+  } catch (e) {}
+})();
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+
+<script>
+  // Rotas usadas por atalhos G P/B/D/R e palette
+  window.IOMAT_ROUTES = {
+    {% if user.is_authenticated %}
+      painel:      "{% url 'dashboard:home' %}",
+      buscas:      "{% url 'searches:list' %}",
+      buscas_nova: "{% url 'searches:new' %}",
+      documentos:  "{% url 'documents:list' %}",
+      revisao:     "{% url 'reviews:queue' %}",
+      validacao:   "{% url 'validations:config' %}",
+      perfil:      "{% url 'accounts:profile' %}"
+    {% endif %}
+  };
+</script>
+</head>
+<body>
+
+<div class="app-shell">
+  {% include "_partials/_sidebar.html" with active=active_nav %}
+
+  {% block topbar %}
+    {% include "_partials/_topbar.html" with crumbs=crumbs %}
+  {% endblock %}
+
+  <main class="app-main">
+    {% if messages %}
+      <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+        {% for message in messages %}
+          <div class="t-card" style="padding:10px 14px; font-size:12px;
+            border-color:
+              {% if message.tags == 'success' %}color-mix(in oklab, var(--t-ok) 50%, var(--t-rule))
+              {% elif message.tags == 'error' %}color-mix(in oklab, var(--t-err) 50%, var(--t-rule))
+              {% elif message.tags == 'warning' %}color-mix(in oklab, var(--t-warn) 50%, var(--t-rule))
+              {% else %}var(--t-rule){% endif %};">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<script src="{% static 'js/iomat.js' %}"></script>
+</body>
+</html>

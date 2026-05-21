@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Fila de revisao - IOMAT{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:16px;">
+
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h1 style="font-size:20px; font-weight:600; margin:0;">
+        Fila de revisao {% include "_partials/_hum_tag.html" %}
+      </h1>
+      <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+        documentos marcados como <strong>duvidosos</strong> pela IA aguardando avaliacao humana
+      </p>
+    </div>
+    <div style="text-align:right;">
+      <p class="t-mono" style="font-size:32px; font-weight:500; color:var(--t-warn); margin:0; line-height:1;">
+        {{ total }}
+      </p>
+      <p class="t-mono" style="font-size:10px; color:var(--t-ink-3); margin:2px 0 0; letter-spacing:0.08em; text-transform:uppercase;">
+        pendente{{ total|pluralize }}
+      </p>
+    </div>
+  </div>
+
+  <div class="t-card" style="padding:0; overflow:hidden;">
+    {% for doc in fila %}
+      {% with c=doc.classificacao_atual %}
+      <a href="{% url 'reviews:review' doc.id %}"
+         style="display:grid; grid-template-columns: 60px 1fr auto; gap:12px; align-items:center;
+                padding:12px 16px; text-decoration:none; color:inherit;
+                border-top:1px solid var(--t-rule); {% if forloop.first %}border-top:0;{% endif %}
+                transition:background 120ms;"
+         onmouseover="this.style.background='var(--t-surface-2)'"
+         onmouseout="this.style.background=''">
+        <span class="t-mono" style="font-size:11px; color:var(--t-ink-3); text-align:center;">
+          {{ doc.ano }}<br>
+          <span style="font-size:9px;">pag {{ doc.pagina }}</span>
+        </span>
+        <div style="min-width:0;">
+          <p style="font-size:13px; font-weight:500; color:var(--t-ink); margin:0;
+                    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            {{ doc.nome_edicao|default:doc.edicao_id }}
+          </p>
+          <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:3px 0 0;
+                                    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            {{ c.justificativa }}
+          </p>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+          {% include "_partials/_status_pill.html" with status="duvidoso" label=c.tipo_ato|default:"sem tipo" %}
+          <span class="t-mono" style="font-size:10px; color:var(--t-accent);">revisar →</span>
+        </div>
+      </a>
+      {% endwith %}
+    {% empty %}
+      <div style="padding:40px; text-align:center; color:var(--t-ink-3); font-size:12px;">
+        Fila zerada. Nada para revisar no momento.
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if total > fila|length %}
+    <p class="t-mono" style="font-size:10px; text-align:center; color:var(--t-ink-3); margin:0;">
+      mostrando 50 de {{ total }} — revise estes para liberar os proximos
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

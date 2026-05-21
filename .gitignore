@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Django
+web/.env
+web/db.sqlite3
+web/media/pdfs/*
+!web/media/pdfs/.gitkeep
+web/staticfiles/
+web/logs/*.log
+
+# Streamlit legado (mantem os PDFs e o DB fora do git)
+pdfs_relevantes/
+documentos_relevantes.db
+.streamlit/secrets.toml
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

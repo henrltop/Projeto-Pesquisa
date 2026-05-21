@@ -1,0 +1,23 @@
+{% comment %}
+Topbar. Uso:
+   {% include "_partials/_topbar.html" with crumbs=crumbs %}
+   crumbs = [{"label":"Workspace"}, {"label":"Buscas","url":"/buscas/"}, {"label":"#417"}]
+{% endcomment %}
+<header class="app-topbar tech-topbar">
+  <nav class="tech-crumbs" aria-label="breadcrumbs">
+    {% for c in crumbs %}
+      {% if not forloop.first %}<span class="sep">/</span>{% endif %}
+      {% if c.url and not forloop.last %}
+        <a href="{{ c.url }}" class="crumb">{{ c.label }}</a>
+      {% else %}
+        <span class="crumb {% if forloop.last %}active{% endif %}">{{ c.label }}</span>
+      {% endif %}
+    {% endfor %}
+  </nav>
+  <div class="tech-topbar-actions">
+    {{ topbar_actions|default:"" }}
+    <button class="t-btn t-btn-secondary" data-action="toggle-theme" title="Alternar tema claro/escuro">
+      <span data-theme-icon>◐</span>
+    </button>
+  </div>
+</header>

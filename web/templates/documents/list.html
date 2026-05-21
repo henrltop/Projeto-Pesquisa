@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Documentos - IOMAT{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:16px;">
+
+  <div>
+    <h1 style="font-size:20px; font-weight:600; margin:0;">Documentos</h1>
+    <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+      paginas do Diario Oficial de MT ja processadas
+    </p>
+  </div>
+
+  {# ---- Filtros ---- #}
+  <form method="get" class="t-card"
+        style="display:grid; grid-template-columns: 2fr 1fr 1fr auto; gap:12px; align-items:end;">
+    <div>
+      <label class="t-label">Busca no texto / termo</label>
+      <input class="t-input" name="q" value="{{ filtros.q }}" placeholder="palavra ou frase">
+    </div>
+    <div>
+      <label class="t-label">Ano</label>
+      <input class="t-input" name="ano" value="{{ filtros.ano }}" type="number" min="1961" max="2030">
+    </div>
+    <div>
+      <label class="t-label">Classificacao</label>
+      <select class="t-select" name="classe">
+        <option value="">Todas</option>
+        {% for v, label in classes %}
+          <option value="{{ v }}" {% if filtros.classe == v %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="t-btn t-btn-primary" style="height:32px;">Filtrar</button>
+  </form>
+
+  {# ---- Chips rapidos ---- #}
+  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+    {% for v, label in classes %}
+      <a href="?classe={{ v }}{% if filtros.q %}&q={{ filtros.q }}{% endif %}{% if filtros.ano %}&ano={{ filtros.ano }}{% endif %}"
+         style="font-family:var(--mono); font-size:10px; text-decoration:none;
+                padding:3px 8px; border-radius:4px;
+                {% if filtros.classe == v %}background:var(--t-ink); color:var(--t-surface);{% else %}background:var(--t-surface-2); color:var(--t-ink-2); border:1px solid var(--t-rule);{% endif %}">
+        {{ label }}
+      </a>
+    {% endfor %}
+    {% if filtros.classe or filtros.q or filtros.ano %}
+      <a href="?" style="font-family:var(--mono); font-size:10px; color:var(--t-ink-3); text-decoration:none; padding:3px 8px;">
+        × limpar
+      </a>
+    {% endif %}
+  </div>
+
+  {# ---- Tabela ---- #}
+  <div class="t-card" style="padding:0; overflow:hidden;">
+    <table class="t-table">
+      <thead>
+        <tr>
+          <th class="num">Ano</th>
+          <th>Edicao</th>
+          <th class="num">Pag.</th>
+          <th>Estado</th>
+          <th>Tipo de ato</th>
+          <th>Justificativa</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for doc in page %}
+          {% with c=doc.classificacao_atual %}
+          <tr>
+            <td class="num t-mono">{{ doc.ano }}</td>
+            <td style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ doc.nome_edicao|default:doc.edicao_id }}</td>
+            <td class="num t-mono">{{ doc.pagina }}</td>
+            <td>
+              {% if doc.estado == 'super_relevante_manual' %}
+                {% include "_partials/_status_pill.html" with status="super_relevante" label="Super Relevante" %}
+                {% include "_partials/_hum_tag.html" %}
+              {% elif doc.estado == 'aprovado_manual' %}
+                {% include "_partials/_status_pill.html" with status="aprovado" label="Aprovado" %}
+                {% include "_partials/_hum_tag.html" %}
+              {% elif doc.estado == 'ressalva_manual' %}
+                {% include "_partials/_status_pill.html" with status="ressalva" label="Com ressalva" %}
+                {% include "_partials/_hum_tag.html" %}
+              {% elif doc.estado == 'rejeitado_manual' %}
+                {% include "_partials/_status_pill.html" with status="rejeitado" label="Rejeitado" %}
+                {% include "_partials/_hum_tag.html" %}
+              {% elif doc.estado == 'super_relevante_ia' %}
+                {% include "_partials/_status_pill.html" with status="super_relevante" label="Super Relevante" %}
+                {% include "_partials/_ai_tag.html" %}
+              {% elif doc.estado == 'relevante_ia' %}
+                {% include "_partials/_status_pill.html" with status="relevante" label="Relevante" %}
+                {% include "_partials/_ai_tag.html" %}
+              {% elif doc.estado == 'duvidoso_ia' %}
+                {% include "_partials/_status_pill.html" with status="duvidoso" label="Duvidoso" %}
+                {% include "_partials/_ai_tag.html" %}
+              {% elif doc.estado == 'irrelevante_ia' %}
+                {% include "_partials/_status_pill.html" with status="irrelevante" label="Descartado" %}
+                {% include "_partials/_ai_tag.html" %}
+              {% else %}
+                {% include "_partials/_status_pill.html" with state="queued" label="Aguardando IA" %}
+              {% endif %}
+            </td>
+            <td>{{ c.tipo_ato|default:"—" }}</td>
+            <td style="max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                title="{{ c.justificativa }}">
+              <span style="color:var(--t-ink-3); font-size:11px;">{{ c.justificativa|default:"—" }}</span>
+            </td>
+            <td class="num">
+              <a href="{{ doc.get_absolute_url }}"
+                 style="color:var(--t-accent); text-decoration:none; font-size:11px;">abrir →</a>
+            </td>
+          </tr>
+          {% endwith %}
+        {% empty %}
+          <tr><td colspan="7" style="padding:32px; text-align:center; color:var(--t-ink-3); font-size:12px;">
+            Nenhum documento encontrado com esses filtros.
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ---- Paginacao ---- #}
+  {% if page.has_other_pages %}
+    <div style="display:flex; justify-content:center; gap:8px; align-items:center;">
+      {% if page.has_previous %}
+        <a class="t-btn t-btn-ghost" href="?page={{ page.previous_page_number }}&q={{ filtros.q }}&ano={{ filtros.ano }}&classe={{ filtros.classe }}">← anterior</a>
+      {% endif %}
+      <span class="t-mono" style="font-size:11px; color:var(--t-ink-3);">
+        pagina {{ page.number }} / {{ page.paginator.num_pages }}
+      </span>
+      {% if page.has_next %}
+        <a class="t-btn t-btn-ghost" href="?page={{ page.next_page_number }}&q={{ filtros.q }}&ano={{ filtros.ano }}&classe={{ filtros.classe }}">proxima →</a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

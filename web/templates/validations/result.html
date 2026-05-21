@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Resultado da Validacao #{{ session.pk }} - IOMAT{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:16px;">
+
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h1 style="font-size:20px; font-weight:600; margin:0;">Resultado da Validacao</h1>
+      <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+        sessao #{{ session.pk }} · {{ session.created_at|date:"d/m/Y H:i" }}
+        · amostra de {{ session.tamanho_amostra }} docs
+        {% if session.aproveitou_avaliados %}· com reaproveitamento{% endif %}
+      </p>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a class="t-btn t-btn-ghost" href="{% url 'validations:export' session_id=session.pk %}">Exportar CSV</a>
+      <a class="t-btn t-btn-ghost" href="{% url 'validations:config' %}">← voltar</a>
+    </div>
+  </div>
+
+  {# ---- KPIs ---- #}
+  <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="kpi-cell">
+      <div class="kpi-label">Documentos avaliados</div>
+      <div class="kpi-value">{{ total_avaliados }}</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">Concordancia geral</div>
+      <div class="kpi-value" style="{% if concordancia_geral >= 70 %}color:var(--t-ok){% elif concordancia_geral >= 50 %}color:var(--t-warn){% else %}color:var(--t-err){% endif %}">
+        {{ concordancia_geral }}%
+      </div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">Tempo medio por doc</div>
+      <div class="kpi-value">{% if tempo_medio %}{{ tempo_medio }}s{% else %}—{% endif %}</div>
+    </div>
+  </div>
+
+  {# ---- Tabela por categoria ---- #}
+  <div class="t-card" style="padding:0; overflow:hidden;">
+    <div style="padding:14px 16px 10px;">
+      <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                color:var(--t-ink-3); margin:0;">Metricas por categoria da IA</p>
+    </div>
+    <table class="t-table">
+      <thead>
+        <tr>
+          <th>Categoria IA</th>
+          <th class="num">Validados</th>
+          <th class="num">Confirmados relevantes</th>
+          <th class="num">Rejeitados</th>
+          <th class="num">Concordancia</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in metricas %}
+          <tr>
+            <td>
+              {% if m.categoria == "relevante" %}
+                <span class="t-pill done"><span class="t-pill-dot"></span><span>Relevante</span></span>
+              {% elif m.categoria == "duvidoso" %}
+                <span class="t-pill warn"><span class="t-pill-dot"></span><span>Duvidoso</span></span>
+              {% else %}
+                <span class="t-pill failed"><span class="t-pill-dot"></span><span>Irrelevante</span></span>
+              {% endif %}
+            </td>
+            <td class="num t-mono">{{ m.total }}</td>
+            <td class="num t-mono" style="color:var(--t-ok);">{{ m.confirmados }}</td>
+            <td class="num t-mono" style="color:var(--t-err);">{{ m.rejeitados }}</td>
+            <td class="num t-mono" style="font-weight:600;
+              {% if m.taxa_concordancia >= 70 %}color:var(--t-ok){% elif m.taxa_concordancia >= 50 %}color:var(--t-warn){% else %}color:var(--t-err){% endif %}">
+              {{ m.taxa_concordancia }}%
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ---- Interpretacao ---- #}
+  <div class="t-card">
+    <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                              color:var(--t-ink-3); margin:0 0 8px;">Como interpretar</p>
+    <div style="font-size:12px; color:var(--t-ink-2); line-height:1.6;">
+      <p style="margin:0 0 6px;">
+        <strong>Concordancia</strong> = o humano e a IA chegaram ao mesmo resultado binario
+        (relevante vs. nao relevante).
+      </p>
+      <p style="margin:0 0 6px;">
+        Mapeamento binario: <span class="t-mono" style="font-size:10px;">super_relevante / aprovado / ressalva → relevante</span>;
+        <span class="t-mono" style="font-size:10px;">rejeitado → nao_relevante</span>.
+      </p>
+      <p style="margin:0;">
+        Para a IA: <span class="t-mono" style="font-size:10px;">super_relevante / relevante → relevante</span>;
+        <span class="t-mono" style="font-size:10px;">duvidoso / irrelevante → nao_relevante</span>.
+      </p>
+    </div>
+  </div>
+
+  {# ---- Divergencias ---- #}
+  {% if divergentes %}
+    <div class="t-card" style="padding:0; overflow:hidden;">
+      <div style="padding:14px 16px 10px;">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0;">
+          Divergencias ({{ divergentes|length }})
+        </p>
+      </div>
+      <table class="t-table">
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th class="num">Ano</th>
+            <th>Edicao/Pag</th>
+            <th>IA</th>
+            <th>Humano</th>
+            <th>Observacao</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in divergentes %}
+            <tr>
+              <td class="num t-mono">{{ d.ordem }}</td>
+              <td class="num t-mono">{{ d.document.ano }}</td>
+              <td class="t-mono" style="font-size:11px;">{{ d.document.edicao_id }}/{{ d.document.pagina }}</td>
+              <td>
+                {% if d.categoria_ia == "relevante" or d.categoria_ia == "super_relevante" %}
+                  <span class="t-pill done"><span class="t-pill-dot"></span><span>{{ d.categoria_ia }}</span></span>
+                {% elif d.categoria_ia == "duvidoso" %}
+                  <span class="t-pill warn"><span class="t-pill-dot"></span><span>{{ d.categoria_ia }}</span></span>
+                {% else %}
+                  <span class="t-pill failed"><span class="t-pill-dot"></span><span>{{ d.categoria_ia }}</span></span>
+                {% endif %}
+              </td>
+              <td>
+                {% if d.decisao_humana == "rejeitado" %}
+                  <span class="t-pill failed"><span class="t-pill-dot"></span><span>{{ d.get_decisao_humana_display }}</span></span>
+                {% else %}
+                  <span class="t-pill done"><span class="t-pill-dot"></span><span>{{ d.get_decisao_humana_display }}</span></span>
+                {% endif %}
+              </td>
+              <td style="max-width:300px; font-size:11px; color:var(--t-ink-3);">
+                {{ d.observacao|truncatechars:100 }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="t-card" style="text-align:center; padding:24px; color:var(--t-ink-3);">
+      <p style="font-size:13px; margin:0;">Nenhuma divergencia encontrada. Concordancia total!</p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

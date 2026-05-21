@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Nova busca - IOMAT{% endblock %}
+{% block content %}
+<div style="max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:16px;">
+
+  <div>
+    <h1 style="font-size:20px; font-weight:600; margin:0;">Nova busca</h1>
+    <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+      configure o termo e o intervalo de anos — o pipeline roda em 6 etapas
+    </p>
+  </div>
+
+  {% if not user.profile.has_openai_key %}
+    <div class="t-card" style="padding:10px 14px; font-size:12px;
+                                border-color: color-mix(in oklab, var(--t-warn) 50%, var(--t-rule));
+                                background: color-mix(in oklab, var(--t-warn) 6%, var(--t-surface));">
+      Voce ainda nao configurou sua chave de IA.
+      <a style="color:var(--t-accent); text-decoration:underline;" href="{% url 'accounts:profile' %}">Configurar agora</a>.
+    </div>
+  {% endif %}
+
+  <form method="post" class="t-card" style="display:flex; flex-direction:column; gap:14px;">
+    {% csrf_token %}
+    <div>
+      <label class="t-label" for="{{ form.termo.id_for_label }}">Termo</label>
+      {{ form.termo }}
+      {% if form.termo.errors %}
+        <p class="t-mono" style="font-size:11px; color:var(--t-err); margin:4px 0 0;">{{ form.termo.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <div style="display:flex; align-items:center; gap:8px;">
+      {{ form.busca_exata }}
+      <label for="{{ form.busca_exata.id_for_label }}" style="font-size:12px; color:var(--t-ink-2);">
+        Busca exata (frase entre aspas)
+      </label>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div>
+        <label class="t-label" for="{{ form.ano_inicio.id_for_label }}">Ano inicial</label>
+        {{ form.ano_inicio }}
+      </div>
+      <div>
+        <label class="t-label" for="{{ form.ano_fim.id_for_label }}">Ano final</label>
+        {{ form.ano_fim }}
+      </div>
+    </div>
+
+    {% if form.non_field_errors %}
+      <p class="t-mono" style="font-size:11px; color:var(--t-err); margin:0;">{{ form.non_field_errors.0 }}</p>
+    {% endif %}
+
+    <div style="border-top:1px solid var(--t-rule); padding-top:12px;">
+      <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                color:var(--t-ink-3); margin:0 0 8px;">
+        Pipeline previsto
+      </p>
+      <ol class="t-mono" style="font-size:11px; color:var(--t-ink-2); padding-left:18px; margin:0; line-height:1.8;">
+        <li>Extracao IOMAT <span style="color:var(--t-ink-3);">— API publica por ano</span></li>
+        <li>Deduplicacao <span style="color:var(--t-ink-3);">— elimina paginas ja classificadas/revisadas</span></li>
+        <li>Classificacao IA <span class="t-tag-ai" style="margin-left:4px;">AI</span></li>
+        <li>Download de PDFs <span style="color:var(--t-ink-3);">— apenas relevantes + duvidosos</span></li>
+        <li>Indexacao full-text <span style="color:var(--t-ink-3);">— Postgres SearchVector</span></li>
+        <li>Revisao humana <span class="t-tag-hum" style="margin-left:4px;">HUM</span></li>
+      </ol>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid var(--t-rule); padding-top:12px;">
+      <a href="{% url 'searches:list' %}" class="t-btn t-btn-ghost">Cancelar</a>
+      <button class="t-btn t-btn-primary">Iniciar pipeline →</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

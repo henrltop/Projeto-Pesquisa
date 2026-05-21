@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Busca #{{ job.id }} - IOMAT{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:16px;">
+
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h1 style="font-size:20px; font-weight:600; margin:0;">
+        Busca <span class="t-mono" style="color:var(--t-ink-3); font-weight:500;">#{{ job.id }}</span>
+      </h1>
+      <p style="font-size:13px; color:var(--t-ink-2); margin:4px 0 0;">
+        <strong>{{ job.termo }}</strong>
+        <span class="t-mono" style="color:var(--t-ink-3); margin-left:6px;">
+          {{ job.ano_inicio }}–{{ job.ano_fim }} · {{ job.criado_por.username }}
+        </span>
+      </p>
+    </div>
+    {% if job.em_andamento %}
+      <form method="post" action="{% url 'searches:cancel' job.id %}" style="margin:0;">
+        {% csrf_token %}
+        <button class="t-btn t-btn-danger">Cancelar pipeline</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div id="progresso"
+       hx-get="{% url 'searches:progress' job.id %}"
+       hx-trigger="{% if job.em_andamento %}load, every 2s{% endif %}"
+       hx-swap="innerHTML">
+    {% include "searches/_progress.html" %}
+  </div>
+</div>
+{% endblock %}

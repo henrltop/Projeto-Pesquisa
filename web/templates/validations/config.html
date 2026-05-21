@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Validacao para Artigo - IOMAT{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:16px;">
+
+  <div>
+    <h1 style="font-size:20px; font-weight:600; margin:0;">Validacao para Artigo</h1>
+    <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+      avaliacao cega para medir concordancia IA vs. humano
+    </p>
+  </div>
+
+  {# ---- Sessao ativa ---- #}
+  {% if sessao_ativa %}
+    <div class="t-card" style="border-left:3px solid var(--t-accent);">
+      <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                color:var(--t-ink-3); margin:0 0 10px;">Sessao em andamento</p>
+      <div style="display:flex; align-items:center; gap:12px; margin:0 0 12px;">
+        <span style="font-size:14px; font-weight:600;">
+          {{ sessao_ativa.total_avaliados }} / {{ sessao_ativa.items.count }} documentos
+        </span>
+        <span class="t-mono" style="font-size:11px; color:var(--t-ink-3);">
+          {{ sessao_ativa.progresso_pct }}%
+        </span>
+      </div>
+      <div class="t-progress" style="height:6px; margin:0 0 14px;">
+        <div class="t-progress-bar ai" style="width:{{ sessao_ativa.progresso_pct }}%;"></div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <a class="t-btn t-btn-primary" href="{% url 'validations:review' session_id=sessao_ativa.pk %}">
+          Continuar sessao
+        </a>
+      </div>
+    </div>
+  {% endif %}
+
+  {# ---- Nova sessao ---- #}
+  {% if not sessao_ativa %}
+    <form method="post" class="t-card">
+      {% csrf_token %}
+      <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                color:var(--t-ink-3); margin:0 0 12px;">Nova sessao de validacao</p>
+
+      <p style="font-size:12px; color:var(--t-ink-2); margin:0 0 16px; line-height:1.6;">
+        O sistema vai sortear documentos de 3 categorias (relevante, duvidoso, irrelevante)
+        em proporcoes iguais. Voce avalia cada texto <strong>sem ver a classificacao da IA</strong>,
+        que so sera revelada apos seu voto. Ao final, metricas de concordancia serao calculadas.
+      </p>
+
+      <div style="display:flex; flex-direction:column; gap:14px; max-width:480px;">
+        <div>
+          <label class="t-label">{{ form.tamanho_amostra.label }}</label>
+          {{ form.tamanho_amostra }}
+          {% if form.tamanho_amostra.help_text %}
+            <p class="t-mono" style="font-size:10px; color:var(--t-ink-3); margin:4px 0 0;">
+              {{ form.tamanho_amostra.help_text }}
+            </p>
+          {% endif %}
+          {% if form.tamanho_amostra.errors %}
+            <p class="t-mono" style="font-size:11px; color:var(--t-err); margin:4px 0 0;">
+              {{ form.tamanho_amostra.errors.0 }}
+            </p>
+          {% endif %}
+        </div>
+
+        <div>
+          <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+            {{ form.aproveitou_avaliados }}
+            <span>
+              {{ form.aproveitou_avaliados.label }}
+            </span>
+          </label>
+          <div class="t-card" style="margin:8px 0 0; padding:10px 12px; border-color:var(--t-warn);
+                                      background:color-mix(in oklab, var(--t-warn) 6%, var(--t-surface));">
+            <p class="t-mono" style="font-size:10px; color:var(--t-warn); margin:0; line-height:1.6;">
+              ⚠ Atencao: avaliacoes anteriores nao foram feitas em condicoes cegas.
+              Marca-las pode introduzir vies nos resultados da validacao.
+              Recomendado desmarcar para dados mais confiáveis.
+            </p>
+          </div>
+        </div>
+
+        <button class="t-btn t-btn-primary" style="align-self:flex-start; padding:8px 20px;">
+          Iniciar sessao de validacao
+        </button>
+      </div>
+    </form>
+  {% endif %}
+
+  {# ---- Sessoes concluidas ---- #}
+  {% if concluidas %}
+    <div class="t-card" style="padding:0; overflow:hidden;">
+      <div style="padding:14px 16px 10px;">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0;">Sessoes concluidas</p>
+      </div>
+      <table class="t-table">
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Data</th>
+            <th class="num">Amostra</th>
+            <th class="num">Concordancia</th>
+            <th>Reaproveitou</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in concluidas %}
+            <tr>
+              <td class="num t-mono">{{ s.pk }}</td>
+              <td class="t-mono" style="font-size:11px;">{{ s.created_at|date:"d/m/Y H:i" }}</td>
+              <td class="num t-mono">{{ s.tamanho_amostra }}</td>
+              <td class="num t-mono" style="font-weight:600;">{{ s.concordancia_pct }}%</td>
+              <td>{% if s.aproveitou_avaliados %}Sim{% else %}Nao{% endif %}</td>
+              <td class="num" style="white-space:nowrap;">
+                <a href="{% url 'validations:result' session_id=s.pk %}"
+                   style="color:var(--t-accent); text-decoration:none; font-size:11px;">resultado</a>
+                &nbsp;
+                <a href="{% url 'validations:export' session_id=s.pk %}"
+                   style="color:var(--t-ink-3); text-decoration:none; font-size:11px;">CSV</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

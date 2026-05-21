@@ -1,0 +1,20 @@
+{% if erro %}
+  <div class="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">
+    Falha ao validar: {{ erro }}
+  </div>
+{% elif provider == "openai" %}
+  <div class="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+    Chave OpenAI valida. Modelo fixo: <code class="bg-white px-1 rounded">{{ modelo_openai_padrao }}</code>.
+  </div>
+  <input type="hidden" name="modelo_selecionado" value="{{ modelo_openai_padrao }}">
+{% elif modelos %}
+  <div class="mt-3 space-y-2">
+    <p class="text-sm text-emerald-700">Chave valida. {{ modelos|length }} modelo(s) disponivel(is).</p>
+    <label class="form-label" for="id_modelo_selecionado">Escolha o modelo</label>
+    <select name="modelo_selecionado" id="id_modelo_selecionado" class="form-input">
+      {% for m in modelos %}
+        <option value="{{ m }}" {% if m == modelo_atual %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </div>
+{% endif %}

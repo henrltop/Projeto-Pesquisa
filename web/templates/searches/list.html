@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Buscas - IOMAT{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:16px;">
+
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h1 style="font-size:20px; font-weight:600; margin:0;">Buscas</h1>
+      <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+        pipelines de extracao + classificacao
+      </p>
+    </div>
+    <a href="{% url 'searches:new' %}" class="t-btn t-btn-primary">+ Nova busca</a>
+  </div>
+
+  <div class="t-card" style="padding:0; overflow:hidden;">
+    <table class="t-table">
+      <thead>
+        <tr>
+          <th>Termo</th>
+          <th>Anos</th>
+          <th>Status</th>
+          <th class="num">Extraidos</th>
+          <th class="num">Rel.</th>
+          <th class="num">Duv.</th>
+          <th class="num">Desc.</th>
+          <th>Por</th>
+          <th class="num">Criada</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for j in jobs %}
+          <tr>
+            <td>
+              <a href="{{ j.get_absolute_url }}"
+                 style="color:var(--t-ink); text-decoration:none; font-weight:500;">{{ j.termo }}</a>
+              {% if j.busca_exata %}
+                <span class="t-mono" style="font-size:9px; color:var(--t-ink-3);
+                                             padding:1px 4px; border:1px solid var(--t-rule);
+                                             border-radius:3px; margin-left:4px;">EXATA</span>
+              {% endif %}
+            </td>
+            <td class="t-mono" style="font-size:11px;">{{ j.ano_inicio }}–{{ j.ano_fim }}</td>
+            <td>{% include "_partials/_status_pill.html" with status=j.status label=j.get_status_display %}</td>
+            <td class="num">{{ j.total_extraidos }}</td>
+            <td class="num" style="color:var(--t-ok);">{{ j.total_relevantes }}</td>
+            <td class="num" style="color:var(--t-warn);">{{ j.total_duvidosos }}</td>
+            <td class="num" style="color:var(--t-ink-3);">{{ j.total_descartados }}</td>
+            <td style="font-size:11px; color:var(--t-ink-3);">{{ j.criado_por.username }}</td>
+            <td class="num t-mono" style="font-size:10px; color:var(--t-ink-3);">{{ j.created_at|date:"d/m H:i" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9" style="padding:32px; text-align:center; color:var(--t-ink-3); font-size:12px;">
+            Nenhuma busca ainda.
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

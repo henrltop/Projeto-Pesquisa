@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Documento #{{ doc.id }} - IOMAT{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:16px;">
+
+  {# -------- Header -------- #}
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+    <div>
+      <h1 style="font-size:18px; font-weight:600; color:var(--t-ink); margin:0;">
+        {{ doc.nome_edicao|default:doc.edicao_id }} <span class="t-mono" style="color:var(--t-ink-3); font-weight:500;">/ pag {{ doc.pagina }}</span>
+      </h1>
+      <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+        {{ doc.data_pub }} · ano {{ doc.ano }} · edicao {{ doc.edicao_id }}
+      </p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      {% if doc.link_oficial %}
+        <a class="t-btn t-btn-ghost" target="_blank" rel="noopener" href="{{ doc.link_oficial }}">Ver no IOMAT</a>
+      {% endif %}
+      {% if doc.caminho_pdf %}
+        <a class="t-btn t-btn-ghost" target="_blank" href="/media/{{ doc.caminho_pdf }}">PDF em nova aba</a>
+      {% endif %}
+      {% if doc.precisa_revisao_manual %}
+        <a class="t-btn t-btn-primary" href="{% url 'reviews:review' doc.id %}">Revisar</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {# -------- Layout: PDF inline (esq) + painel lateral (dir) -------- #}
+  <div style="display:grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap:16px; align-items:start;">
+
+    {# ---------- Coluna esquerda ---------- #}
+    <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+
+      {% if doc.caminho_pdf %}
+        <div class="t-card" style="padding:0; overflow:hidden;">
+          <div style="padding:10px 14px; border-bottom:1px solid var(--t-rule);
+                      display:flex; justify-content:space-between; align-items:center;">
+            <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                      color:var(--t-ink-3); margin:0;">PDF original</p>
+            <span class="t-mono" style="font-size:10px; color:var(--t-ink-3);">inline</span>
+          </div>
+          {% include "_partials/_pdf_viewer.html" with pdf_path=doc.caminho_pdf height="760px" viewer_id="detail" %}
+        </div>
+      {% else %}
+        <div class="t-card" style="padding:14px; text-align:center; color:var(--t-ink-3); font-size:12px;">
+          PDF nao foi baixado (documento descartado ou ainda em processamento).
+        </div>
+      {% endif %}
+
+      <div class="t-card" style="padding:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 8px;">
+          <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                    color:var(--t-ink-3); margin:0;">Texto bruto (OCR/API)</p>
+          <button id="btn-copiar" class="t-btn t-btn-ghost" style="font-size:10px; padding:2px 8px;"
+                  onclick="navigator.clipboard.writeText(document.getElementById('texto-bruto').textContent).then(function(){var b=document.getElementById('btn-copiar');b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar texto'},1500)})">Copiar texto</button>
+        </div>
+        <pre id="texto-bruto" class="t-mono" style="font-size:11px; line-height:1.55; color:var(--t-ink-2);
+                                    max-height:320px; overflow:auto; white-space:pre-wrap;
+                                    margin:0; padding:8px; background:var(--t-surface-2);
+                                    border:1px solid var(--t-rule); border-radius:4px;">{{ doc.texto_bruto }}</pre>
+      </div>
+    </div>
+
+    {# ---------- Coluna direita ---------- #}
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div class="t-card" style="padding:14px;">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0 0 10px;">Classificacoes IA</p>
+        <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;">
+          {% for c in classificacoes %}
+            <li style="padding-bottom:10px; border-bottom:1px solid var(--t-rule);">
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                {% include "_partials/_status_pill.html" with status=c.classificacao label=c.get_classificacao_display %}
+                {% include "_partials/_ai_tag.html" %}
+              </div>
+              <p style="font-size:12px; font-weight:600; color:var(--t-ink); margin:4px 0 0;">
+                {{ c.tipo_ato|default:"—" }}
+              </p>
+              <p style="font-size:11px; color:var(--t-ink-2); margin:4px 0 0;">
+                {{ c.justificativa }}
+              </p>
+              <p class="t-mono" style="font-size:10px; color:var(--t-ink-3); margin:6px 0 0;">
+                {{ c.modelo_ia }} · {{ c.created_at|date:"d/m H:i" }}
+              </p>
+            </li>
+          {% empty %}
+            <li style="font-size:12px; color:var(--t-ink-3);">Ainda nao classificado.</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="t-card" style="padding:14px;">
+        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                                  color:var(--t-ink-3); margin:0 0 10px;">Revisao humana</p>
+        {% if reviews %}
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;">
+            {% for r in reviews %}
+              <li style="padding-bottom:10px; border-bottom:1px solid var(--t-rule);">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  {% include "_partials/_status_pill.html" with status=r.decisao label=r.get_decisao_display %}
+                  {% include "_partials/_hum_tag.html" %}
+                </div>
+                <p style="font-size:11px; color:var(--t-ink-2); margin:6px 0 0;">
+                  {{ r.comentario|default:"(sem comentario)" }}
+                </p>
+                <p class="t-mono" style="font-size:10px; color:var(--t-ink-3); margin:6px 0 0;">
+                  {{ r.revisor.username }} · {{ r.created_at|date:"d/m H:i" }}
+                </p>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p style="font-size:12px; color:var(--t-ink-3); margin:0;">Ainda sem revisao humana.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

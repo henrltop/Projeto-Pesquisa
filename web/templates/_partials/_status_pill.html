@@ -1,0 +1,24 @@
+{% comment %}
+Status pill generico. Aceita:
+  - state (explicito): running / done / failed / queued / warn
+  - status (do dominio): pendente/extraindo/classificando/concluido/falhou/cancelado/
+                          relevante/duvidoso/irrelevante/aprovado/rejeitado/
+                          queued/running/done/failed/skipped
+  - label (texto do rotulo)
+Uso: {% include "_partials/_status_pill.html" with status=job.status label=job.get_status_display %}
+{% endcomment %}
+{% if state %}
+  <span class="t-pill {{ state }}"><span class="t-pill-dot"></span><span>{{ label }}</span></span>
+{% else %}
+  {% if status == 'concluido' or status == 'done' or status == 'super_relevante' or status == 'relevante' or status == 'aprovado' %}
+    <span class="t-pill done"><span class="t-pill-dot"></span><span>{{ label }}</span></span>
+  {% elif status == 'falhou' or status == 'failed' or status == 'cancelado' or status == 'irrelevante' or status == 'rejeitado' %}
+    <span class="t-pill failed"><span class="t-pill-dot"></span><span>{{ label }}</span></span>
+  {% elif status == 'duvidoso' or status == 'warn' or status == 'ressalva' %}
+    <span class="t-pill warn"><span class="t-pill-dot"></span><span>{{ label }}</span></span>
+  {% elif status == 'extraindo' or status == 'classificando' or status == 'running' %}
+    <span class="t-pill running"><span class="t-pill-dot"></span><span>{{ label }}</span></span>
+  {% else %}
+    <span class="t-pill queued"><span class="t-pill-dot"></span><span>{{ label }}</span></span>
+  {% endif %}
+{% endif %}

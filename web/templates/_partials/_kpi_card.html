@@ -1,0 +1,9 @@
+{# Uso: {% include "_partials/_kpi_card.html" with label="Relevantes IA" value=1206 sub="ultimos 30 dias" delta="+4%" delta_dir="up" %} #}
+<div class="kpi-cell">
+  <div class="kpi-label">{{ label }}</div>
+  <div class="kpi-value">
+    {{ value }}
+    {% if delta %}<span class="kpi-delta {{ delta_dir|default:'up' }}">{{ delta }}</span>{% endif %}
+  </div>
+  {% if sub %}<div class="kpi-sub">{{ sub }}</div>{% endif %}
+</div>
