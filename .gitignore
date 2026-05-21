@@ -8,9 +8,6 @@ env/
 
 # Django
 web/.env
-web/db.sqlite3
-web/media/pdfs/*
-!web/media/pdfs/.gitkeep
 web/staticfiles/
 web/logs/*.log
 
