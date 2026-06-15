@@ -22,3 +22,16 @@ documentos_relevantes.db
 *.swp
 .DS_Store
 Thumbs.db
+
+# Banco de dados e backups (nao versionar)
+web/db.sqlite3
+web/*.sqlite3
+web/db.sqlite3.bak*
+
+# PDFs baixados (corpus local, nao versionar) - mantem o .gitkeep
+web/media/pdfs/*.pdf
+
+# Saidas temporarias de analise/scripts
+web/_*.txt
+web/_*.log
+web/comparar_*.csv
