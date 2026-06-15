@@ -7,6 +7,7 @@ import re
 import time
 from dataclasses import dataclass
 
+import httpx
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
@@ -150,10 +151,18 @@ def extrair_json(texto: str) -> dict:
 # ---------- Classificador ----------
 
 class OpenAIClassifier:
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini", base_url: str | None = None):
+    def __init__(self, api_key: str, model: str = "gpt-4o-mini", base_url: str | None = None,
+                 verify_ssl: bool | None = None):
         kwargs = {"api_key": api_key}
         if base_url:
             kwargs["base_url"] = base_url
+            # OpenWebUI / servidores institucionais (ex.: IFMT) costumam ter certificado
+            # SSL invalido. O SDK da OpenAI usa httpx, que verifica SSL por padrao, e a
+            # conexao falha com APIConnectionError. Quando ha base_url custom, desligamos
+            # a verificacao (mesma postura do delimitador, que usa requests verify=False).
+            if verify_ssl is None:
+                verify_ssl = False
+            kwargs["http_client"] = httpx.Client(verify=verify_ssl, timeout=httpx.Timeout(120.0))
         self.client = OpenAI(**kwargs)
         self.model = model
         self.is_openwebui = bool(base_url)
