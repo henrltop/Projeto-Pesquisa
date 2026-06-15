@@ -35,3 +35,6 @@ web/media/pdfs/*.pdf
 web/_*.txt
 web/_*.log
 web/comparar_*.csv
+
+# Estado local do Claude Code (worktrees, sessoes) - nao versionar
+.claude/
