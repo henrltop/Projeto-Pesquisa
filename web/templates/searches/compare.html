@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Comparar buscas - IOMAT{% endblock %}
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:16px;">
+
+  <div>
+    <h1 style="font-size:20px; font-weight:600; margin:0;">Comparar buscas</h1>
+    <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
+      classificacoes lado a lado, documento a documento
+    </p>
+  </div>
+
+  {# ---- Seletor de buscas ---- #}
+  <form method="get" class="t-card" style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+    <div style="flex:1; min-width:280px;">
+      <label class="t-label">Buscas a comparar (IDs separados por virgula)</label>
+      <input class="t-input" name="jobs" value="{{ ids_param }}" placeholder="ex: 19,31,32">
+    </div>
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--t-ink-2);">
+      <input type="checkbox" name="divergentes" value="1" {% if so_divergentes %}checked{% endif %}>
+      so divergentes
+    </label>
+    <button class="t-btn t-btn-primary" style="height:32px;">Comparar</button>
+  </form>
+
+  {# ---- Legenda das buscas ---- #}
+  <div class="t-card" style="display:flex; gap:16px; flex-wrap:wrap; font-size:11px;">
+    {% for j in jobs %}
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <span style="font-weight:600;">Busca #{{ j.id }}</span>
+        <span class="t-mono" style="color:var(--t-ink-3);">
+          {{ j.termo }} · {{ j.ano_inicio }}–{{ j.ano_fim }}
+          · {{ j.modelo_efetivo|default:"" }}
+          {% if j.usar_delimitador %}· <span style="color:var(--t-accent);">c/ delimitador</span>{% endif %}
+        </span>
+        <span class="t-mono" style="color:var(--t-ink-3);">
+          rel {{ j.total_relevantes }} · duv {{ j.total_duvidosos }} · desc {{ j.total_descartados }}
+        </span>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div style="display:flex; gap:16px; font-size:11px; color:var(--t-ink-3);">
+    <span>Documentos comparados: <strong style="color:var(--t-ink);">{{ total }}</strong></span>
+    <span>Divergentes: <strong style="color:var(--t-warn);">{{ n_divergentes }}</strong></span>
+  </div>
+
+  {# ---- Tabela comparativa ---- #}
+  <div class="t-card" style="padding:0; overflow:auto;">
+    <table class="t-table">
+      <thead>
+        <tr>
+          <th class="num">Ano</th>
+          <th>Edicao/Pag</th>
+          {% for j in jobs %}<th>#{{ j.id }}</th>{% endfor %}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for linha in linhas %}
+          <tr {% if linha.divergente %}style="background:color-mix(in oklab, var(--t-warn) 5%, transparent);"{% endif %}>
+            <td class="num t-mono">{{ linha.doc.ano }}</td>
+            <td class="t-mono" style="font-size:11px; white-space:nowrap;">
+              {{ linha.doc.edicao_id }}/{{ linha.doc.pagina }}
+            </td>
+            {% for c in linha.cells %}
+              <td style="vertical-align:top; max-width:320px;">
+                {% if c %}
+                  <div style="display:flex; align-items:center; gap:4px; margin-bottom:2px;">
+                    {% include "_partials/_status_pill.html" with status=c.classificacao label=c.get_classificacao_display %}
+                    {% if c.com_contexto %}<span class="t-mono" style="font-size:8px; color:var(--t-accent);">CTX</span>{% endif %}
+                  </div>
+                  {% if c.tipo_ato %}<div style="font-size:10px; font-weight:600; color:var(--t-ink-2);">{{ c.tipo_ato }}</div>{% endif %}
+                  <div style="font-size:10px; color:var(--t-ink-3); line-height:1.35;">{{ c.justificativa|truncatechars:160 }}</div>
+                {% else %}
+                  <span style="color:var(--t-ink-3); font-size:11px;">—</span>
+                {% endif %}
+              </td>
+            {% endfor %}
+            <td class="num">
+              <a href="{% url 'documents:detail' linha.doc.id %}" target="_blank"
+                 style="color:var(--t-accent); text-decoration:none; font-size:11px; white-space:nowrap;">ler doc →</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="{{ jobs|length|add:3 }}" style="padding:32px; text-align:center; color:var(--t-ink-3); font-size:12px;">
+            Nenhum documento para comparar com esses filtros.
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

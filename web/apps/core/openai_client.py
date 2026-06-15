@@ -12,17 +12,69 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 PROMPT_SISTEMA = """Voce e um pesquisador academico rigoroso avaliando o Diario Oficial de Mato Grosso.
-Projeto: "Mapeamento da legislacao do ensino superior tecnologico (1961-2008)".
+Projeto: "Mapeamento da legislacao da EDUCACAO PROFISSIONAL E TECNOLOGICA / ENSINO TECNICO".
 
-Classifique em 4 niveis:
+==================== ESCOPO (LEIA PRIMEIRO) ====================
+O objeto da pesquisa e a EDUCACAO PROFISSIONAL E TECNOLOGICA / ENSINO TECNICO em
+QUALQUER NIVEL (tanto NIVEL MEDIO quanto SUPERIOR). Isto INCLUI (sao RELEVANTES):
+- Ensino tecnico de nivel medio / habilitacao tecnica de 2o grau (ex: Tecnico em
+  Contabilidade, Tecnico em Agrimensura, Tecnico em Enfermagem, Tecnico Agricola).
+- Cursos profissionalizantes e de educacao profissional (formacao para o trabalho).
+- Cursos Superiores de Tecnologia (CST), tecnologo, graduacao tecnologica.
+- Educacao profissional de nivel superior (pos-medio/terciario).
+- Instituicoes que ofertam esses cursos (escolas tecnicas, CEFET, Escola Agrotecnica,
+  institutos/faculdades de tecnologia, centros de educacao profissional, UNEMAT/IFMT
+  em cursos tecnicos ou tecnologicos).
+- Atos sobre esses cursos/instituicoes: criacao, autorizacao, reconhecimento,
+  regulamentacao, curriculo/grade, regimento, convenio educacional, denominacao de
+  escola tecnica, plano de curso.
 
-- "super_relevante": O texto e um ato normativo CENTRAL para o tema — cria, autoriza, reconhece ou regulamenta diretamente Cursos Superiores de Tecnologia ou Educacao Profissional de nivel superior. Exemplos: lei que cria um CST, decreto que autoriza funcionamento de curso tecnologico, resolucao do CEE/MT que reconhece um CST. Use APENAS quando o ato e inequivocamente nuclear para o mapeamento.
+NAO faz parte do escopo (estes sao IRRELEVANTES, mesmo citando "ensino", "tecnico",
+"profissional" ou "curso"):
+- Ensino fundamental / 1o grau / educacao basica comum.
+- Ensino medio REGULAR/PROPEDEUTICO (nao-tecnico), curso normal/magisterio comum.
+- Cursos livres genericos sem carater profissionalizante claro.
+- Edital de concurso publico que apenas EXIGE um curso, ou que oferece curso de
+  formacao para o proprio cargo (ex: curso de formacao de policiais) — isso NAO cria
+  nem regulamenta educacao profissional; classifique como IRRELEVANTE.
+- Atos administrativos de pessoal (nomeacao, exoneracao, ferias, licenca, diaria).
+- Orcamento, balanco, demonstrativo, licitacao, contrato administrativo generico.
+- Atas de empresas, sindicatos ou associacoes sem relacao com oferta de ensino tecnico.
+- Mencao tangencial/incidental (ex: terreno doado para futura escola, noticia, rubrica
+  orcamentaria que so cita "educacao profissional"). Mencao NAO e ato sobre o tema.
 
-- "relevante": CERTEZA de que o texto trata de criacao, autorizacao, reconhecimento ou regulamentacao de Cursos Superiores de Tecnologia, Educacao Profissional, Convenios educacionais (MEC/Estado), Conselho Estadual de Educacao (CEE/MT), Secretaria de Educacao (SEC/SEDUC), UNEMAT ou Escola Tecnica Federal. Tipicamente atos normativos explicitos, porem de carater complementar ou administrativo (nao nuclear).
+REGRA DE OURO: marque como relevante quando o ato TRATAR de um curso ou instituicao de
+educacao profissional/tecnica (qualquer nivel). Na duvida entre o tema e algo apenas
+administrativo/tangencial, use "duvidoso" (vai para revisao humana). NUNCA invente
+conteudo que nao esteja no texto.
 
-- "duvidoso": Ha mencao ao tema mas o ato nao e claramente normativo, OU o contexto e ambiguo (ex: curso tecnico citado sem ato legal, convenio educacional vago, portaria sem escopo definido). Quando em duvida, classifique como duvidoso para revisao humana.
+==================== NIVEIS ====================
+- "super_relevante": ato CENTRAL e inequivoco que cria, autoriza, reconhece ou
+  regulamenta DIRETAMENTE um curso tecnico/profissionalizante/tecnologico ou uma
+  instituicao desse tipo (ex: lei que cria escola tecnica; resolucao do CEE/MT que
+  autoriza/reconhece curso tecnico ou CST; decreto que cria centro de educacao
+  profissional).
 
-- "irrelevante": Pregoes, licitacoes, contratos de compra, nomeacoes de servidores comuns, avisos de inicio de aulas sem peso legal, balancos, mencoes casuais sem peso institucional.
+- "relevante": trata de educacao profissional/tecnica (qualquer nivel) de forma
+  complementar ou administrativa ligada ao ensino (curriculo, regimento, convenio
+  educacional, portaria sobre o curso, mudanca de denominacao de escola tecnica,
+  plano de curso, reconhecimento de concluintes de curso tecnico).
+
+- "duvidoso": ha indicios do tema mas o texto e ambiguo/truncado, OU pode ser apenas
+  tangencial/administrativo sem tratar do curso em si. Use para mandar a revisao humana.
+
+- "irrelevante": tudo fora do escopo acima — ensino fundamental/medio regular nao-tecnico,
+  edital de concurso, nomeacoes, orcamentos, licitacoes, atas comerciais, mencoes
+  tangenciais, etc.
+
+IMPORTANTE SOBRE O CONTEXTO:
+O texto pode conter VARIAS paginas do Diario Oficial. A PAGINA-ALVO estara demarcada; as
+demais sao apenas contexto, pois um ato pode comecar/terminar em outra pagina. Use o
+contexto para entender o ato completo, MAS a classificacao se refere ao ATO DA PAGINA-ALVO.
+ATENCAO: nao deixe o contexto inflar a relevancia — se as paginas vizinhas tratam de
+OUTROS assuntos (mesmo que citem ensino), isso NAO torna a pagina-alvo relevante. A
+classificacao e sobre o ATO DA PAGINA-ALVO. Baseie-se SO no que esta escrito; nunca
+invente cursos, instituicoes ou conteudos que nao aparecam no texto.
 
 TIPOS DE ATO ESPERADOS (use exatamente um destes quando aplicavel):
 Constituicao, Emenda Constitucional, Lei, Lei Complementar, Lei Ordinaria, Lei Delegada, Medida Provisoria, Decreto Legislativo, Decreto, Decreto-Lei, Resolucao, Portaria, Instrucao Normativa, Regimento, Regulamento, Estatuto, Diretrizes Curriculares, Plano.
@@ -121,8 +173,20 @@ class OpenAIClassifier:
             kwargs["response_format"] = {"type": "json_object"}
         return self.client.chat.completions.create(**kwargs)
 
-    def classificar(self, texto: str, palavra_chave: str, retries: int = 3) -> Classificacao:
-        prompt_usuario = f"Palavra-chave: '{palavra_chave}'.\n\nTexto:\n{texto}"
+    def classificar(
+        self,
+        texto: str,
+        palavra_chave: str,
+        retries: int = 3,
+        multipagina: bool = False,
+    ) -> Classificacao:
+        if multipagina:
+            prompt_usuario = (
+                f"Termo de busca que retornou a pagina-alvo: '{palavra_chave}'.\n\n"
+                f"Conteudo (a PAGINA-ALVO esta demarcada; as demais sao contexto):\n{texto}"
+            )
+        else:
+            prompt_usuario = f"Palavra-chave: '{palavra_chave}'.\n\nTexto:\n{texto}"
         ultimo_erro: Exception | None = None
         # Em OpenAI oficial comecamos forcando JSON. Em OpenWebUI comecamos sem.
         forcar_json = not self.is_openwebui

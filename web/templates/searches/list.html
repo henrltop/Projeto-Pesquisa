@@ -10,7 +10,10 @@
         pipelines de extracao + classificacao
       </p>
     </div>
-    <a href="{% url 'searches:new' %}" class="t-btn t-btn-primary">+ Nova busca</a>
+    <div style="display:flex; gap:8px;">
+      <a href="{% url 'searches:compare' %}" class="t-btn t-btn-ghost">Comparar buscas</a>
+      <a href="{% url 'searches:new' %}" class="t-btn t-btn-primary">+ Nova busca</a>
+    </div>
   </div>
 
   <div class="t-card" style="padding:0; overflow:hidden;">

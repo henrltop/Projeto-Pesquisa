@@ -14,13 +14,18 @@ from apps.documents.models import Classification, Document
 from apps.reviews.models import Review
 from apps.searches.models import PipelineStage, SearchJob, criar_stages
 
+from .contexto import montar_contexto_delimitado
+from .delimitador import Delimitador
 from .iomat_client import IomatError, baixar_pdf, buscar_por_ano
 from .openai_client import OpenAIClassifier
 
 logger = logging.getLogger(__name__)
 
-PRECO_INPUT_POR_1M = Decimal("0.15")   # gpt-4o-mini (USD por 1M tokens de input)
-PRECO_OUTPUT_POR_1M = Decimal("0.60")  # gpt-4o-mini
+# Preco do modelo de classificacao (USD por 1M tokens). Vem das settings para poder
+# ser ajustado ao modelo realmente usado (NAO assuma gpt-4o-mini). Veja
+# OPENAI_PRECO_INPUT_POR_1M / OPENAI_PRECO_OUTPUT_POR_1M em config/settings/base.py.
+PRECO_INPUT_POR_1M = Decimal(str(getattr(settings, "OPENAI_PRECO_INPUT_POR_1M", "0.15")))
+PRECO_OUTPUT_POR_1M = Decimal(str(getattr(settings, "OPENAI_PRECO_OUTPUT_POR_1M", "0.60")))
 
 
 def _pdf_dir() -> Path:
@@ -32,6 +37,20 @@ def _pdf_dir() -> Path:
 def _cancelado(job: SearchJob) -> bool:
     job.refresh_from_db(fields=["status"])
     return job.status == SearchJob.Status.CANCELADO
+
+
+def _parada_solicitada(job: SearchJob) -> str | None:
+    """Retorna 'cancelado', 'pausado' ou None conforme o status atual no banco.
+
+    Pausa e cancelamento param o worker na proxima iteracao; a diferenca e que
+    a pausa NAO marca as etapas como falha (para permitir retomar de onde parou).
+    """
+    job.refresh_from_db(fields=["status"])
+    if job.status == SearchJob.Status.CANCELADO:
+        return "cancelado"
+    if job.status == SearchJob.Status.PAUSADO:
+        return "pausado"
+    return None
 
 
 def _nome_pdf(doc: Document) -> str:
@@ -92,7 +111,11 @@ def process_search_job(self, search_job_id: int) -> None:
         documentos_do_job: list[Document] = []
 
         for i, ano in enumerate(range(job.ano_inicio, job.ano_fim + 1)):
-            if _cancelado(job):
+            parada = _parada_solicitada(job)
+            if parada == "pausado":
+                logger.info("Job %s pausado durante extracao", job.pk)
+                return
+            if parada == "cancelado":
                 logger.info("Job %s cancelado durante extracao", job.pk)
                 stage_extracao.falhar("Cancelado pelo usuario")
                 return
@@ -148,7 +171,12 @@ def process_search_job(self, search_job_id: int) -> None:
         for i, doc in enumerate(documentos_do_job):
             if Review.objects.filter(document=doc).exists():
                 reaproveitados_pks.add(doc.pk)
-            elif Classification.objects.filter(document=doc, termo_buscado=job.termo).exists():
+            elif (
+                not job.forcar_reclassificacao
+                and Classification.objects.filter(
+                    document=doc, termo_buscado__iexact=job.termo
+                ).exists()
+            ):
                 ja_classificados_pks.add(doc.pk)
             if (i + 1) % 20 == 0:
                 stage_dedup.tick(feitos=i + 1)
@@ -175,6 +203,28 @@ def process_search_job(self, search_job_id: int) -> None:
 
         classifier = OpenAIClassifier(api_key=api_key, model=modelo, base_url=base_url)
         pdf_dir = _pdf_dir()
+        # Contexto multipagina: expande paginas vizinhas ate as fronteiras do ato.
+        # Por padrao classificamos a pagina isolada (maior concordancia com humano).
+        # Se o job pedir, usamos o DELIMITADOR (LLM local gpt-oss) para identificar
+        # quais paginas pertencem ao mesmo ato antes de classificar.
+        usar_delimitador = bool(getattr(job, "usar_delimitador", False))
+        delimitador = None
+        if usar_delimitador:
+            delimitador = Delimitador(
+                base_url=getattr(settings, "DELIMITADOR_BASE_URL", ""),
+                api_key=getattr(settings, "DELIMITADOR_API_KEY", ""),
+                modelo=getattr(settings, "DELIMITADOR_MODELO", ""),
+                verify_ssl=getattr(settings, "DELIMITADOR_VERIFY_SSL", False),
+                num_ctx=getattr(settings, "DELIMITADOR_NUM_CTX", 16384),
+                trecho_limite=getattr(settings, "DELIMITADOR_TRECHO", 6000),
+                endpoint=getattr(settings, "DELIMITADOR_ENDPOINT", "/ollama/api/chat"),
+            )
+            if not delimitador.configurado:
+                logger.warning("Delimitador pedido mas nao configurado; classificando por pagina.")
+                usar_delimitador = False
+                delimitador = None
+        delim_janela = int(getattr(settings, "DELIMITADOR_JANELA", 2))
+        ctx_cache: dict = {}
         tokens_in_total = 0
         tokens_out_total = 0
         downloads_feitos = 0
@@ -182,7 +232,16 @@ def process_search_job(self, search_job_id: int) -> None:
 
         total_docs = len(pendentes)
         for idx, doc in enumerate(pendentes):
-            if _cancelado(job):
+            parada = _parada_solicitada(job)
+            if parada == "pausado":
+                logger.info("Job %s pausado durante classificacao (doc %s/%s)",
+                            job.pk, idx + 1, total_docs)
+                job.mensagem_progresso = (
+                    f"Pausado em {idx + 1}/{total_docs}. Retome para continuar de onde parou."
+                )
+                job.save(update_fields=["mensagem_progresso"])
+                return
+            if parada == "cancelado":
                 logger.info("Job %s cancelado durante classificacao", job.pk)
                 stage_classificacao.falhar("Cancelado pelo usuario")
                 stage_download.falhar("Cancelado pelo usuario")
@@ -195,8 +254,30 @@ def process_search_job(self, search_job_id: int) -> None:
             )
             job.save(update_fields=["doc_atual", "mensagem_progresso"])
 
+            paginas_ctx = ""
+            com_contexto = False
             try:
-                c = classifier.classificar(doc.texto_bruto or "", job.termo)
+                if usar_delimitador:
+                    ctx = montar_contexto_delimitado(
+                        tipo_edicao=doc.tipo_edicao,
+                        edicao_id=doc.edicao_id,
+                        pagina=doc.pagina,
+                        texto_alvo=doc.texto_bruto or "",
+                        delimitador=delimitador,
+                        janela=delim_janela,
+                        cache=ctx_cache,
+                    )
+                    paginas_ctx = ",".join(str(p) for p in ctx["paginas"])
+                    # so e "com contexto" se o ato realmente vazou para outras paginas
+                    com_contexto = len(ctx["paginas"]) > 1
+                    multipag = com_contexto
+                    c = classifier.classificar(
+                        ctx["texto"] if multipag else (doc.texto_bruto or ""),
+                        job.termo,
+                        multipagina=multipag,
+                    )
+                else:
+                    c = classifier.classificar(doc.texto_bruto or "", job.termo)
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Erro classificando doc %s", doc.pk)
                 job.total_erros += 1
@@ -216,6 +297,8 @@ def process_search_job(self, search_job_id: int) -> None:
                 modelo_ia=classifier.model,
                 tokens_input=c.tokens_input,
                 tokens_output=c.tokens_output,
+                com_contexto=com_contexto,
+                paginas_contexto=paginas_ctx,
             )
             tokens_in_total += c.tokens_input or 0
             tokens_out_total += c.tokens_output or 0

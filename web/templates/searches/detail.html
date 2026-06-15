@@ -15,12 +15,24 @@
         </span>
       </p>
     </div>
-    {% if job.em_andamento %}
-      <form method="post" action="{% url 'searches:cancel' job.id %}" style="margin:0;">
-        {% csrf_token %}
-        <button class="t-btn t-btn-danger">Cancelar pipeline</button>
-      </form>
-    {% endif %}
+    <div style="display:flex; gap:8px; align-items:center;">
+      <a class="t-btn t-btn-ghost" href="{% url 'documents:list' %}?busca={{ job.id }}">Ver documentos desta busca →</a>
+      {% if job.pausavel %}
+        <form method="post" action="{% url 'searches:pause' job.id %}" style="margin:0;">
+          {% csrf_token %}
+          <button class="t-btn t-btn-ghost">⏸ Pausar</button>
+        </form>
+        <form method="post" action="{% url 'searches:cancel' job.id %}" style="margin:0;">
+          {% csrf_token %}
+          <button class="t-btn t-btn-danger">Cancelar pipeline</button>
+        </form>
+      {% elif job.retomavel %}
+        <form method="post" action="{% url 'searches:resume' job.id %}" style="margin:0;">
+          {% csrf_token %}
+          <button class="t-btn t-btn-primary">▶ Retomar de onde parou</button>
+        </form>
+      {% endif %}
+    </div>
   </div>
 
   <div id="progresso"

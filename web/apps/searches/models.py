@@ -8,6 +8,7 @@ class SearchJob(models.Model):
         PENDENTE = "pendente", "Pendente"
         EXTRAINDO = "extraindo", "Extraindo do IOMAT"
         CLASSIFICANDO = "classificando", "Classificando com IA"
+        PAUSADO = "pausado", "Pausado"
         CONCLUIDO = "concluido", "Concluido"
         FALHOU = "falhou", "Falhou"
         CANCELADO = "cancelado", "Cancelado"
@@ -20,6 +21,8 @@ class SearchJob(models.Model):
 
     termo = models.CharField(max_length=300)
     busca_exata = models.BooleanField(default=True)
+    forcar_reclassificacao = models.BooleanField(default=False)
+    usar_delimitador = models.BooleanField(default=True)
     ano_inicio = models.PositiveIntegerField()
     ano_fim = models.PositiveIntegerField()
 
@@ -62,6 +65,16 @@ class SearchJob(models.Model):
     @property
     def em_andamento(self) -> bool:
         return self.status in {self.Status.PENDENTE, self.Status.EXTRAINDO, self.Status.CLASSIFICANDO}
+
+    @property
+    def pausavel(self) -> bool:
+        """Pode receber o comando de pausa (esta rodando)."""
+        return self.em_andamento
+
+    @property
+    def retomavel(self) -> bool:
+        """Pode ser retomado de onde parou (idempotencia pula o ja feito)."""
+        return self.status in {self.Status.PAUSADO, self.Status.CANCELADO, self.Status.FALHOU}
 
     @property
     def total_processados(self) -> int:

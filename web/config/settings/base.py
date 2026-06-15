@@ -114,6 +114,38 @@ CELERY_TASK_SOFT_TIME_LIMIT = 60 * 60 * 3  # 3h soft limit
 # Criptografia de campos sensiveis (chave OpenAI dos usuarios)
 FIELD_ENCRYPTION_KEY = os.environ.get("FIELD_ENCRYPTION_KEY", "")
 
+# ---------------- Preco do modelo de classificacao ----------------
+# USD por 1 milhao de tokens. Valores oficiais do gpt-5.4-mini (jun/2026):
+# input $0.75, output $4.50, input cacheado $0.075 por 1M. Usado para a
+# estimativa de custo exibida no painel.
+OPENAI_PRECO_INPUT_POR_1M = os.environ.get("OPENAI_PRECO_INPUT_POR_1M", "0.75")
+OPENAI_PRECO_OUTPUT_POR_1M = os.environ.get("OPENAI_PRECO_OUTPUT_POR_1M", "4.50")
+
+# ---------------- Delimitador de atos (LLM local / OpenWebUI) ----------------
+# Fase 1 do pipeline opcional de contexto: um modelo local (gpt-oss:20b) decide
+# quais paginas vizinhas pertencem ao mesmo ato, antes da classificacao pelo GPT.
+# Pode ser sobrescrito por variaveis de ambiente.
+DELIMITADOR_BASE_URL = os.environ.get(
+    "DELIMITADOR_BASE_URL", "https://tutoria.cba.ifmt.edu.br"
+)
+DELIMITADOR_API_KEY = os.environ.get(
+    "DELIMITADOR_API_KEY", "sk-a41a6dfea7f041ecb78e3f44fa97dc40"
+)
+DELIMITADOR_MODELO = os.environ.get("DELIMITADOR_MODELO", "gpt-oss:20b")
+DELIMITADOR_VERIFY_SSL = os.environ.get("DELIMITADOR_VERIFY_SSL", "False").lower() == "true"
+# Janela de paginas vizinhas (cada lado) oferecidas ao delimitador.
+DELIMITADOR_JANELA = int(os.environ.get("DELIMITADOR_JANELA", "2"))
+# Endpoint NATIVO do Ollama via OpenWebUI. O /api/chat/completions (OpenAI-compat)
+# IGNORA options.num_ctx e capa o prompt em 4096 tokens; o /ollama/api/chat respeita.
+DELIMITADOR_ENDPOINT = os.environ.get("DELIMITADOR_ENDPOINT", "/ollama/api/chat")
+# Janela de contexto pedida ao modelo (so vale no endpoint nativo).
+# Meio-termo: 8192 cabe ~2500 chars/pagina x 5 paginas com folga e e rapido.
+# O experimento da Busca #36 mostrou que 16384/6000 nao melhorou e ficou 2,5x
+# mais lento (~40s/doc), entao ficamos no equilibrio.
+DELIMITADOR_NUM_CTX = int(os.environ.get("DELIMITADOR_NUM_CTX", "8192"))
+# Quantos caracteres de cada pagina enviar ao delimitador (antes: 1100 fixo).
+DELIMITADOR_TRECHO = int(os.environ.get("DELIMITADOR_TRECHO", "2500"))
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

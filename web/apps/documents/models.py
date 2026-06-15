@@ -95,6 +95,8 @@ class Classification(models.Model):
     modelo_ia = models.CharField(max_length=64, blank=True, default="")
     tokens_input = models.PositiveIntegerField(null=True, blank=True)
     tokens_output = models.PositiveIntegerField(null=True, blank=True)
+    com_contexto = models.BooleanField(default=False, db_index=True)
+    paginas_contexto = models.CharField(max_length=120, blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
 

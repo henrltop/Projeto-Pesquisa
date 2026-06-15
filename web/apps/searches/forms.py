@@ -8,7 +8,8 @@ from .models import SearchJob
 class SearchJobForm(forms.ModelForm):
     class Meta:
         model = SearchJob
-        fields = ("termo", "busca_exata", "ano_inicio", "ano_fim")
+        fields = ("termo", "busca_exata", "ano_inicio", "ano_fim",
+                  "forcar_reclassificacao", "usar_delimitador")
         widgets = {
             "termo": forms.TextInput(attrs={
                 "placeholder": "ex: ensino superior tecnologico",
