@@ -47,3 +47,27 @@ class ReviewForm(forms.ModelForm):
                 "Justifique ao discordar da classificacao da IA.",
             )
         return cleaned
+
+
+def panel_context(doc, *, form=None):
+    """Contexto do painel de validacao inline (usado no detalhe e na resposta HTMX)."""
+    classificacoes = list(doc.classificacoes.all().order_by("-created_at"))
+    classificacao_atual = classificacoes[0] if classificacoes else None
+    ia_class = classificacao_atual.classificacao if classificacao_atual else None
+    existente = doc.reviews.order_by("-created_at").first()
+    if form is None:
+        form = ReviewForm(instance=existente, classificacao_ia=ia_class)
+    concordante = form.decisao_concordante()
+    if form.is_bound:
+        selected = form.data.get("decisao") or ""
+    else:
+        selected = (existente.decisao if existente else concordante) or ""
+    return {
+        "doc": doc,
+        "existente": existente,
+        "form": form,
+        "classificacao_atual": classificacao_atual,
+        "decisoes": Review.Decisao.choices,
+        "decisao_concordante": concordante,
+        "selected_decisao": selected,
+    }

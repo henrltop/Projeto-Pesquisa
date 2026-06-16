@@ -4,6 +4,7 @@ from django.db.models import Case, CharField, F, OuterRef, Q, Subquery, Value, W
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, render
 
+from apps.reviews.forms import panel_context
 from apps.reviews.models import Review
 from apps.searches.models import SearchJob
 
@@ -167,19 +168,16 @@ def document_detail(request, pk: int):
             termo_buscado = c.termo_buscado
             break
 
-    return render(
-        request,
-        "documents/detail.html",
-        {
-            "doc": doc,
-            "classificacoes": classificacoes,
-            "reviews": doc.reviews.all().order_by("-created_at"),
-            "paginas_contexto": paginas_ctx,
-            "paginas_ato": _paginas_do_ato(doc, classificacoes),
-            "texto_completo": _texto_completo(doc, classificacoes),
-            "termo_buscado": termo_buscado,
-        },
-    )
+    ctx = {
+        "classificacoes": classificacoes,
+        "paginas_contexto": paginas_ctx,
+        "paginas_ato": _paginas_do_ato(doc, classificacoes),
+        "texto_completo": _texto_completo(doc, classificacoes),
+        "termo_buscado": termo_buscado,
+    }
+    # painel de validacao inline (doc, form, decisoes, decisao_concordante, ...)
+    ctx.update(panel_context(doc))
+    return render(request, "documents/detail.html", ctx)
 
 
 @login_required

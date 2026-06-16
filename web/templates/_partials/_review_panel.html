@@ -1,0 +1,61 @@
+{% comment %}
+Painel de validacao humana inline. Salva via HTMX (sem trocar de pagina) e
+substitui a si mesmo (#review-panel) com a resposta. Contexto: ver
+apps.reviews.forms.panel_context.
+{% endcomment %}
+<div class="t-card" id="review-panel" style="padding:14px;">
+  <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+                            color:var(--t-ink-3); margin:0 0 10px;">Revisao humana</p>
+
+  {% if existente %}
+    <div style="padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid var(--t-rule);">
+      <div style="display:flex; align-items:center; gap:6px;">
+        {% include "_partials/_status_pill.html" with status=existente.decisao label=existente.get_decisao_display %}
+        {% include "_partials/_hum_tag.html" %}
+      </div>
+      {% if existente.comentario %}
+        <p style="font-size:11px; color:var(--t-ink-2); margin:6px 0 0;">{{ existente.comentario }}</p>
+      {% endif %}
+      <p class="t-mono" style="font-size:10px; color:var(--t-ink-3); margin:6px 0 0;">
+        {{ existente.revisor.username }} · {{ existente.created_at|date:"d/m H:i" }}
+      </p>
+    </div>
+  {% endif %}
+
+  {% if classificacao_atual %}
+    <form hx-post="{% url 'reviews:review' doc.id %}"
+          hx-target="#review-panel" hx-swap="outerHTML"
+          style="display:flex; flex-direction:column; gap:8px;">
+      {% csrf_token %}
+      {% if decisao_concordante %}
+        <p class="t-help" style="margin:0;">
+          IA classificou como <strong>{{ classificacao_atual.get_classificacao_display }}</strong>.
+          A opcao marcada e "concordar"; escolher outra = discordar (exige justificativa).
+        </p>
+      {% endif %}
+
+      <select name="decisao" class="t-select">
+        {% for value, label in decisoes %}
+          <option value="{{ value }}" {% if value == selected_decisao %}selected{% endif %}>
+            {{ label }}{% if value == decisao_concordante %}  ✓ concorda c/ IA{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+
+      <textarea name="comentario" class="form-input" rows="2"
+                placeholder="Justificativa (obrigatoria so se discordar)">{{ form.comentario.value|default:'' }}</textarea>
+
+      {% if form.errors %}
+        <p class="t-mono" style="font-size:11px; color:var(--t-err); margin:0;">
+          {% for field, errs in form.errors.items %}{{ errs.0 }} {% endfor %}
+        </p>
+      {% endif %}
+
+      <button class="t-btn t-btn-primary" style="justify-content:center; padding:7px;">
+        {% if existente %}Atualizar validacao{% else %}Validar{% endif %}
+      </button>
+    </form>
+  {% else %}
+    <p style="font-size:12px; color:var(--t-ink-3); margin:0;">Documento ainda nao classificado.</p>
+  {% endif %}
+</div>

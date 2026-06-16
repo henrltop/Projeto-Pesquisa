@@ -21,9 +21,7 @@
         <a class="t-btn t-btn-ghost" target="_blank" href="/media/{{ doc.caminho_pdf }}">PDF em nova aba</a>
       {% endif %}
       {% if doc.precisa_revisao_manual %}
-        <a class="t-btn t-btn-primary" href="{% url 'reviews:review' doc.id %}">Revisar</a>
-      {% elif doc.classificacao_atual %}
-        <a class="t-btn t-btn-secondary" href="{% url 'reviews:review' doc.id %}">Validar</a>
+        <a class="t-btn t-btn-ghost" href="{% url 'reviews:review' doc.id %}">Abrir na fila de revisao</a>
       {% endif %}
     </div>
   </div>
@@ -128,30 +126,7 @@
         {% endif %}
       </div>
 
-      <div class="t-card" style="padding:14px;">
-        <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
-                                  color:var(--t-ink-3); margin:0 0 10px;">Revisao humana</p>
-        {% if reviews %}
-          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;">
-            {% for r in reviews %}
-              <li style="padding-bottom:10px; border-bottom:1px solid var(--t-rule);">
-                <div style="display:flex; align-items:center; gap:6px;">
-                  {% include "_partials/_status_pill.html" with status=r.decisao label=r.get_decisao_display %}
-                  {% include "_partials/_hum_tag.html" %}
-                </div>
-                <p style="font-size:11px; color:var(--t-ink-2); margin:6px 0 0;">
-                  {{ r.comentario|default:"(sem comentario)" }}
-                </p>
-                <p class="t-mono" style="font-size:10px; color:var(--t-ink-3); margin:6px 0 0;">
-                  {{ r.revisor.username }} · {{ r.created_at|date:"d/m H:i" }}
-                </p>
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p style="font-size:12px; color:var(--t-ink-3); margin:0;">Ainda sem revisao humana.</p>
-        {% endif %}
-      </div>
+      {% include "_partials/_review_panel.html" %}
     </div>
   </div>
 </div>

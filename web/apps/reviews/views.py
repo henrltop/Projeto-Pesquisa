@@ -7,7 +7,7 @@ from django.views.decorators.http import require_http_methods
 from apps.documents.models import Classification, Document
 from apps.documents.views import _paginas_do_ato
 
-from .forms import ReviewForm
+from .forms import ReviewForm, panel_context
 from .models import Review
 
 
@@ -52,6 +52,9 @@ def review_document(request, document_id: int):
             review.document = doc
             review.revisor = request.user
             review.save()
+            # Validacao inline (HTMX): devolve so o painel atualizado, sem trocar de pagina.
+            if request.htmx:
+                return render(request, "_partials/_review_panel.html", panel_context(doc))
             messages.success(request, f"Documento marcado como {review.get_decisao_display().lower()}.")
             # Duvidoso segue o fluxo de fila (avanca para o proximo pendente).
             # "Validar" de um nao-duvidoso volta para o proprio documento.
@@ -62,6 +65,9 @@ def review_document(request, document_id: int):
                 messages.info(request, "Fila de revisao zerada. Bom trabalho!")
                 return redirect("reviews:queue")
             return redirect(doc.get_absolute_url())
+        elif request.htmx:
+            # Invalido via HTMX (ex.: discordou sem justificar): devolve o painel com o erro.
+            return render(request, "_partials/_review_panel.html", panel_context(doc, form=form))
     else:
         form = ReviewForm(instance=instance, classificacao_ia=ia_class)
 
