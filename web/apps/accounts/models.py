@@ -22,6 +22,10 @@ class UserProfile(models.Model):
     )
     openwebui_base_url = models.URLField(blank=True, default="")
     modelo_selecionado = models.CharField(max_length=120, blank=True, default="")
+    # Quando True, a tela do documento mostra a RESPOSTA BRUTA da IA (JSON cru) em vez do
+    # texto formatado. As respostas brutas sao SEMPRE salvas (campo resposta_crua); isto
+    # so muda a exibicao. Desmarcado por padrao.
+    ver_respostas_brutas = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

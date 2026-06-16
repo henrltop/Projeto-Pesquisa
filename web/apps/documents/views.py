@@ -174,6 +174,9 @@ def document_detail(request, pk: int):
         "paginas_ato": _paginas_do_ato(doc, classificacoes),
         "texto_completo": _texto_completo(doc, classificacoes),
         "termo_buscado": termo_buscado,
+        "ver_respostas_brutas": getattr(
+            getattr(request.user, "profile", None), "ver_respostas_brutas", False
+        ),
     }
     # painel de validacao inline (doc, form, decisoes, decisao_concordante, ...)
     ctx.update(panel_context(doc))
