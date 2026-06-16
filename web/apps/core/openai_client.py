@@ -245,11 +245,26 @@ class OpenAIClassifier:
 
                 classe = (parsed.get("classificacao") or "").lower().strip()
                 if classe not in {"super_relevante", "relevante", "duvidoso", "irrelevante"}:
+                    # JSON valido mas SEM o campo 'classificacao' esperado (ex.: modelo
+                    # fraco devolveu {"resumo": ...}). Isso e FALHA DE FORMATO, nao "duvida":
+                    # tenta de novo com reforco e, se persistir, conta como ERRO. Antes isso
+                    # virava "duvidoso" silenciosamente, o que mascarava modelos ruins e
+                    # contaminava o benchmark (dezenas de duvidosos falsos).
                     logger.warning(
-                        "Classe invalida retornada: %r; forcando duvidoso. Parsed: %r",
-                        classe, parsed,
+                        "Resposta sem 'classificacao' valida (tentativa %d/%d). Parsed: %r",
+                        tentativa + 1, retries, parsed,
                     )
-                    classe = "duvidoso"
+                    if tentativa < retries - 1:
+                        prompt_usuario = (
+                            f"{prompt_usuario}\n\n"
+                            "IMPORTANTE: devolva SOMENTE o JSON com a chave \"classificacao\" "
+                            "valendo exatamente super_relevante, relevante, duvidoso ou irrelevante."
+                        )
+                        continue
+                    raise ClassificacaoParseError(
+                        f"Modelo nao retornou 'classificacao' valida apos {retries} tentativas. "
+                        f"Ultima resposta (trecho): {resposta_crua[:300]!r}"
+                    )
 
                 usage = getattr(response, "usage", None)
                 return Classificacao(
