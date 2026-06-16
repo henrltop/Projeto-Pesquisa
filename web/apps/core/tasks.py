@@ -168,8 +168,12 @@ def process_search_job(self, search_job_id: int) -> None:
         stage_dedup.iniciar(total=len(documentos_do_job), mensagem="verificando reaproveitaveis")
         reaproveitados_pks: set[int] = set()
         ja_classificados_pks: set[int] = set()
+        # forcar_reclassificacao = "classifique tudo de novo" (modo benchmark de modelos):
+        # ignora tanto a revisao humana quanto a classificacao anterior. So ADICIONA novas
+        # linhas de Classification (com modelo_ia e search_job proprios); nunca altera/apaga
+        # classificacoes, revisoes ou buscas ja existentes.
         for i, doc in enumerate(documentos_do_job):
-            if Review.objects.filter(document=doc).exists():
+            if not job.forcar_reclassificacao and Review.objects.filter(document=doc).exists():
                 reaproveitados_pks.add(doc.pk)
             elif (
                 not job.forcar_reclassificacao
