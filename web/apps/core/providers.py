@@ -3,6 +3,12 @@ from __future__ import annotations
 
 import requests
 
+try:  # OpenWebUI institucional (IFMT) tem cert SSL invalido; silencia o warning.
+    import urllib3
+    urllib3.disable_warnings()
+except Exception:  # noqa: BLE001
+    pass
+
 
 class ProviderError(Exception):
     pass
@@ -32,6 +38,7 @@ def _openwebui_models(api_key: str, base_url: str) -> list[str]:
                 url,
                 headers={"Authorization": f"Bearer {api_key}"},
                 timeout=15,
+                verify=False,  # OpenWebUI institucional (IFMT) tem cert SSL invalido
             )
         except requests.RequestException as exc:
             ultimo_erro = f"{url}: {exc}"
