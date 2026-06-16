@@ -22,6 +22,8 @@
       {% endif %}
       {% if doc.precisa_revisao_manual %}
         <a class="t-btn t-btn-primary" href="{% url 'reviews:review' doc.id %}">Revisar</a>
+      {% elif doc.classificacao_atual %}
+        <a class="t-btn t-btn-secondary" href="{% url 'reviews:review' doc.id %}">Validar</a>
       {% endif %}
     </div>
   </div>
@@ -33,44 +35,7 @@
     <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
 
       {# O carrossel baixa a pagina sob demanda (vale ate para irrelevantes, p/ auditoria). #}
-        <div class="t-card" style="padding:14px;"
-             id="pdf-card"
-             data-doc-id="{{ doc.id }}"
-             data-paginas="{{ paginas_ato|join:',' }}"
-             data-alvo="{{ doc.pagina }}"
-             data-termo="{{ termo_buscado }}">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin:0 0 8px; flex-wrap:wrap;">
-            <p class="t-mono" style="font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
-                                      color:var(--t-ink-3); margin:0;">PDF do ato</p>
-            <div style="display:flex; gap:6px; align-items:center;">
-              <button type="button" id="pdf-mark" class="t-btn t-btn-ghost" style="font-size:10px; padding:2px 8px;">Marcar no PDF</button>
-              <a id="pdf-newtab" class="t-btn t-btn-ghost" style="font-size:10px; padding:2px 8px;" target="_blank" href="#">abrir em nova aba</a>
-            </div>
-          </div>
-
-          {# Carrossel: pagina-alvo no centro, vizinhas pelas setas #}
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button type="button" id="pdf-prev" class="t-btn t-btn-ghost" style="font-size:18px; padding:8px 12px;">‹</button>
-            <div style="flex:1; min-width:0;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 6px;">
-                <span id="pdf-label" class="t-mono" style="font-size:10px; color:var(--t-ink-3);">carregando...</span>
-              </div>
-              <div id="pdf-stage"
-                   style="overflow:auto; background:var(--t-surface-2); height:760px;
-                          display:flex; align-items:flex-start; justify-content:center; padding:12px;
-                          border:1px solid var(--t-rule); border-radius:4px;">
-                <div id="pdf-holder" style="position:relative; line-height:0;">
-                  <canvas id="pdf-canvas"></canvas>
-                  <div id="pdf-textlayer" class="textLayer"></div>
-                </div>
-              </div>
-            </div>
-            <button type="button" id="pdf-next" class="t-btn t-btn-ghost" style="font-size:18px; padding:8px 12px;">›</button>
-          </div>
-
-          {# Indicadores (dots) das paginas do ato #}
-          <div id="pdf-dots" style="display:flex; gap:6px; justify-content:center; margin-top:10px; flex-wrap:wrap;"></div>
-        </div>
+      {% include "_partials/_pdf_marker.html" %}
 
       <div class="t-card" style="padding:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin:0 0 8px; flex-wrap:wrap;">
@@ -199,19 +164,6 @@
     padding: 0 1px;
     font-weight: 600;
   }
-  /* camada de texto do PDF.js (para marca-texto sobre o PDF) */
-  .textLayer {
-    position: absolute; left: 0; top: 0; overflow: hidden;
-    line-height: 1; opacity: 1;
-  }
-  .textLayer span {
-    color: transparent; position: absolute; white-space: pre;
-    transform-origin: 0% 0%; cursor: text;
-  }
-  .textLayer mark.hl-pdf {
-    background: rgba(57, 255, 20, 0.45);
-    color: transparent; padding: 0; border-radius: 2px;
-  }
 </style>
 <script>
 (function(){
@@ -251,142 +203,5 @@ function marcarPalavra(){
   var m = pre.querySelector("mark.hl");
   if (m) { m.scrollIntoView({block:"center", behavior:"smooth"}); }
 }
-
-(function(){
-  var card = document.getElementById("pdf-card");
-  if (!card) return;
-
-  var docId = card.getAttribute("data-doc-id");
-  var paginas = card.getAttribute("data-paginas").split(",").map(function(s){ return parseInt(s,10); }).filter(Boolean);
-  var alvo = parseInt(card.getAttribute("data-alvo"), 10);
-  var termo = card.getAttribute("data-termo") || "";
-  if (!paginas.length) return;
-
-  var idx = Math.max(0, paginas.indexOf(alvo));   // comeca na pagina-alvo
-  var marcado = false;
-  var urlCache = {};
-  var canvas = document.getElementById("pdf-canvas");
-  var holder = document.getElementById("pdf-holder");
-  var textlayer = document.getElementById("pdf-textlayer");
-  var stage = document.getElementById("pdf-stage");
-  var label = document.getElementById("pdf-label");
-  var newtab = document.getElementById("pdf-newtab");
-  var dotsBox = document.getElementById("pdf-dots");
-  var btnMark = document.getElementById("pdf-mark");
-
-  function norm(s){ return (s||"").toLowerCase()
-    .replace(/[áàâãä]/g,"a").replace(/[éèêë]/g,"e").replace(/[íìîï]/g,"i")
-    .replace(/[óòôõö]/g,"o").replace(/[úùûü]/g,"u").replace(/ç/g,"c"); }
-  function escHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-  function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
-  var palavras = termo.split(/\s+/).filter(function(w){ return w.length>=3; }).map(function(w){ return norm(w); });
-
-  function loadPdfJs(cb){
-    if (window.pdfjsLib){ cb(); return; }
-    var s=document.createElement("script");
-    s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-    s.onload=function(){
-      pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-      cb();
-    };
-    document.head.appendChild(s);
-  }
-
-  function marcarTexto(orig){
-    // norm() e 1:1 em tamanho, entao os indices coincidem com o texto original
-    var low = norm(orig), ints = [];
-    palavras.forEach(function(w){
-      var from = 0, i;
-      while ((i = low.indexOf(w, from)) >= 0){ ints.push([i, i + w.length]); from = i + w.length; }
-    });
-    if (!ints.length) return escHtml(orig);
-    ints.sort(function(a,b){ return a[0]-b[0]; });
-    var merged = [ints[0]];
-    for (var k=1;k<ints.length;k++){
-      var last = merged[merged.length-1];
-      if (ints[k][0] <= last[1]) last[1] = Math.max(last[1], ints[k][1]);
-      else merged.push(ints[k]);
-    }
-    var out = "", pos = 0;
-    merged.forEach(function(iv){
-      out += escHtml(orig.slice(pos, iv[0]));
-      out += '<mark class="hl-pdf">' + escHtml(orig.slice(iv[0], iv[1])) + '</mark>';
-      pos = iv[1];
-    });
-    return out + escHtml(orig.slice(pos));
-  }
-
-  function aplicarHighlight(){
-    var spans = textlayer.querySelectorAll("span");
-    spans.forEach(function(sp){
-      var orig = (sp.dataset.orig !== undefined) ? sp.dataset.orig : sp.textContent;
-      sp.dataset.orig = orig;
-      sp.innerHTML = (marcado && palavras.length) ? marcarTexto(orig) : escHtml(orig);
-    });
-  }
-
-  function renderDots(){
-    dotsBox.innerHTML="";
-    paginas.forEach(function(p,i){
-      var d=document.createElement("button"); d.type="button";
-      d.textContent = (p===alvo ? "★ " : "") + "pag " + p;
-      d.style.cssText="font-family:var(--mono); font-size:10px; padding:3px 8px; border-radius:4px; cursor:pointer; " +
-        (i===idx ? "background:var(--t-ink); color:var(--t-surface); border:1px solid var(--t-ink);"
-                 : "background:var(--t-surface-2); color:var(--t-ink-2); border:1px solid var(--t-rule);");
-      d.onclick=function(){ idx=i; mostrar(); };
-      dotsBox.appendChild(d);
-    });
-  }
-
-  function renderPdf(url){
-    pdfjsLib.getDocument(url).promise.then(function(pdf){ return pdf.getPage(1); }).then(function(page){
-      var avail = stage.clientWidth - 24;
-      var vp0 = page.getViewport({scale:1});
-      var scale = Math.min(avail/vp0.width, 2.0);
-      var vp = page.getViewport({scale:scale});
-      canvas.width=vp.width; canvas.height=vp.height;
-      holder.style.width=vp.width+"px"; holder.style.height=vp.height+"px";
-      textlayer.innerHTML=""; textlayer.style.width=vp.width+"px"; textlayer.style.height=vp.height+"px";
-      textlayer.style.setProperty("--scale-factor", scale);
-      var task = page.render({canvasContext: canvas.getContext("2d"), viewport: vp});
-      task.promise.then(function(){ return page.getTextContent(); }).then(function(tc){
-        return pdfjsLib.renderTextLayer({textContent: tc, container: textlayer, viewport: vp, textDivs: []}).promise;
-      }).then(function(){ aplicarHighlight(); }).catch(function(){});
-    }).catch(function(){
-      stage.innerHTML='<p style="color:var(--t-err); font-size:12px; margin:auto;">Erro ao renderizar o PDF.</p>';
-    });
-  }
-
-  function mostrar(){
-    var pagina = paginas[idx];
-    var rotulo = (pagina===alvo ? "PAGINA-ALVO" : "contexto");
-    label.textContent = rotulo + " — pagina " + pagina + "  (" + (idx+1) + "/" + paginas.length + ")";
-    renderDots();
-    if (urlCache[pagina]){ newtab.href=urlCache[pagina]; renderPdf(urlCache[pagina]); return; }
-    label.textContent = "baixando pagina " + pagina + "...";
-    fetch("/documentos/" + docId + "/contexto/" + pagina + "/")
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        if (!data.ok){ stage.innerHTML='<p style="color:var(--t-err); font-size:12px; margin:auto;">Nao foi possivel carregar a pagina '+pagina+'.</p>'; return; }
-        urlCache[pagina]=data.url; newtab.href=data.url;
-        label.textContent = rotulo + " — pagina " + pagina + "  (" + (idx+1) + "/" + paginas.length + ")";
-        renderPdf(data.url);
-      })
-      .catch(function(){ stage.innerHTML='<p style="color:var(--t-err); font-size:12px; margin:auto;">Falha de rede ao carregar a pagina '+pagina+'.</p>'; });
-  }
-
-  document.getElementById("pdf-prev").onclick=function(){ idx=(idx-1+paginas.length)%paginas.length; mostrar(); };
-  document.getElementById("pdf-next").onclick=function(){ idx=(idx+1)%paginas.length; mostrar(); };
-  if (btnMark){
-    if (!palavras.length){ btnMark.style.display="none"; }
-    btnMark.onclick=function(){
-      marcado=!marcado;
-      btnMark.textContent = marcado ? "Desmarcar PDF" : "Marcar no PDF";
-      aplicarHighlight();
-    };
-  }
-
-  loadPdfJs(function(){ mostrar(); });
-})();
 </script>
 {% endblock %}

@@ -24,9 +24,16 @@ def document_list(request):
         .order_by("-created_at")
         .values("decisao")[:1]
     )
+    ultimo_tipo = (
+        Classification.objects
+        .filter(document=OuterRef("pk"))
+        .order_by("-created_at")
+        .values("tipo_ato")[:1]
+    )
     qs = Document.objects.all().annotate(
         ultima_classe=Subquery(ultima_classe),
         ultima_review=Subquery(ultima_review),
+        ultimo_tipo=Subquery(ultimo_tipo),
     ).annotate(
         estado_efetivo=Case(
             When(ultima_review="super_relevante", then=Value("super_relevante")),
@@ -42,6 +49,7 @@ def document_list(request):
     termo = request.GET.get("q", "").strip()
     classe = request.GET.get("classe", "").strip()
     busca = request.GET.get("busca", "").strip()
+    tipo = request.GET.get("tipo", "").strip()
 
     if ano.isdigit():
         qs = qs.filter(ano=int(ano))
@@ -52,6 +60,10 @@ def document_list(request):
         ).distinct()
     if classe in dict(Classification.Classificacao.choices):
         qs = qs.filter(estado_efetivo=classe)
+    if tipo:
+        # tipo_ato e texto livre da IA; "contem" pega variacoes
+        # (ex.: "concurso" casa "Edital de concurso" e "Concurso publico").
+        qs = qs.filter(ultimo_tipo__icontains=tipo)
 
     busca_obj = None
     if busca.isdigit():
@@ -71,15 +83,25 @@ def document_list(request):
         .values("id", "termo", "ano_inicio", "ano_fim")
     )
 
+    # tipos de ato distintos para sugestoes (autocomplete) do filtro por tipo
+    tipos = (
+        Classification.objects
+        .exclude(tipo_ato="")
+        .values_list("tipo_ato", flat=True)
+        .distinct()
+        .order_by("tipo_ato")
+    )
+
     return render(
         request,
         "documents/list.html",
         {
             "page": page,
-            "filtros": {"ano": ano, "q": termo, "classe": classe, "busca": busca},
+            "filtros": {"ano": ano, "q": termo, "classe": classe, "busca": busca, "tipo": tipo},
             "classes": Classification.Classificacao.choices,
             "buscas": buscas,
             "busca_obj": busca_obj,
+            "tipos": tipos,
         },
     )
 

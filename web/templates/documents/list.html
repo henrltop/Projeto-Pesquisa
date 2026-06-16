@@ -19,14 +19,14 @@
         Mostrando apenas documentos da <strong>Busca #{{ busca_obj.id }}</strong> —
         <span class="t-mono">{{ busca_obj.termo }} · {{ busca_obj.ano_inicio }}–{{ busca_obj.ano_fim }}</span>
       </span>
-      <a href="?{% if filtros.q %}q={{ filtros.q }}&{% endif %}{% if filtros.ano %}ano={{ filtros.ano }}&{% endif %}{% if filtros.classe %}classe={{ filtros.classe }}{% endif %}"
+      <a href="?{% if filtros.q %}q={{ filtros.q|urlencode }}&{% endif %}{% if filtros.ano %}ano={{ filtros.ano }}&{% endif %}{% if filtros.classe %}classe={{ filtros.classe }}&{% endif %}{% if filtros.tipo %}tipo={{ filtros.tipo|urlencode }}{% endif %}"
          class="t-btn t-btn-ghost" style="font-size:11px;">× remover filtro de busca</a>
     </div>
   {% endif %}
 
   {# ---- Filtros ---- #}
   <form method="get" class="t-card"
-        style="display:grid; grid-template-columns: 2fr 1fr 1fr 1.4fr auto; gap:12px; align-items:end;">
+        style="display:grid; grid-template-columns: 1.6fr 0.8fr 1fr 1.3fr 1.3fr auto; gap:12px; align-items:end;">
     <div>
       <label class="t-label">Busca no texto / termo</label>
       <input class="t-input" name="q" value="{{ filtros.q }}" placeholder="palavra ou frase">
@@ -45,6 +45,14 @@
       </select>
     </div>
     <div>
+      <label class="t-label">Tipo de ato</label>
+      <input class="t-input" name="tipo" value="{{ filtros.tipo }}" list="tipos-list"
+             placeholder="ex: lei, portaria, concurso" autocomplete="off">
+      <datalist id="tipos-list">
+        {% for t in tipos %}<option value="{{ t }}"></option>{% endfor %}
+      </datalist>
+    </div>
+    <div>
       <label class="t-label">Busca (pipeline)</label>
       <select class="t-select" name="busca">
         <option value="">Todas as buscas</option>
@@ -61,14 +69,14 @@
   {# ---- Chips rapidos ---- #}
   <div style="display:flex; gap:6px; flex-wrap:wrap;">
     {% for v, label in classes %}
-      <a href="?classe={{ v }}{% if filtros.q %}&q={{ filtros.q }}{% endif %}{% if filtros.ano %}&ano={{ filtros.ano }}{% endif %}{% if filtros.busca %}&busca={{ filtros.busca }}{% endif %}"
+      <a href="?classe={{ v }}{% if filtros.q %}&q={{ filtros.q|urlencode }}{% endif %}{% if filtros.ano %}&ano={{ filtros.ano }}{% endif %}{% if filtros.busca %}&busca={{ filtros.busca }}{% endif %}{% if filtros.tipo %}&tipo={{ filtros.tipo|urlencode }}{% endif %}"
          style="font-family:var(--mono); font-size:10px; text-decoration:none;
                 padding:3px 8px; border-radius:4px;
                 {% if filtros.classe == v %}background:var(--t-ink); color:var(--t-surface);{% else %}background:var(--t-surface-2); color:var(--t-ink-2); border:1px solid var(--t-rule);{% endif %}">
         {{ label }}
       </a>
     {% endfor %}
-    {% if filtros.classe or filtros.q or filtros.ano or filtros.busca %}
+    {% if filtros.classe or filtros.q or filtros.ano or filtros.busca or filtros.tipo %}
       <a href="?" style="font-family:var(--mono); font-size:10px; color:var(--t-ink-3); text-decoration:none; padding:3px 8px;">
         × limpar
       </a>
@@ -130,7 +138,12 @@
                 title="{{ c.justificativa }}">
               <span style="color:var(--t-ink-3); font-size:11px;">{{ c.justificativa|default:"—" }}</span>
             </td>
-            <td class="num">
+            <td class="num" style="white-space:nowrap;">
+              {% if c %}
+                <a href="{% url 'reviews:review' doc.id %}"
+                   style="color:var(--t-ink-3); text-decoration:none; font-size:11px;">validar</a>
+                <span style="color:var(--t-rule-2);">·</span>
+              {% endif %}
               <a href="{{ doc.get_absolute_url }}"
                  style="color:var(--t-accent); text-decoration:none; font-size:11px;">abrir →</a>
             </td>
@@ -149,13 +162,13 @@
   {% if page.has_other_pages %}
     <div style="display:flex; justify-content:center; gap:8px; align-items:center;">
       {% if page.has_previous %}
-        <a class="t-btn t-btn-ghost" href="?page={{ page.previous_page_number }}&q={{ filtros.q }}&ano={{ filtros.ano }}&classe={{ filtros.classe }}&busca={{ filtros.busca }}">← anterior</a>
+        <a class="t-btn t-btn-ghost" href="?page={{ page.previous_page_number }}&q={{ filtros.q|urlencode }}&ano={{ filtros.ano }}&classe={{ filtros.classe }}&busca={{ filtros.busca }}&tipo={{ filtros.tipo|urlencode }}">← anterior</a>
       {% endif %}
       <span class="t-mono" style="font-size:11px; color:var(--t-ink-3);">
         pagina {{ page.number }} / {{ page.paginator.num_pages }}
       </span>
       {% if page.has_next %}
-        <a class="t-btn t-btn-ghost" href="?page={{ page.next_page_number }}&q={{ filtros.q }}&ano={{ filtros.ano }}&classe={{ filtros.classe }}&busca={{ filtros.busca }}">proxima →</a>
+        <a class="t-btn t-btn-ghost" href="?page={{ page.next_page_number }}&q={{ filtros.q|urlencode }}&ano={{ filtros.ano }}&classe={{ filtros.classe }}&busca={{ filtros.busca }}&tipo={{ filtros.tipo|urlencode }}">proxima →</a>
       {% endif %}
     </div>
   {% endif %}

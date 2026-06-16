@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from apps.documents.models import Classification, Document
+from apps.documents.views import _paginas_do_ato
 
 from .forms import ReviewForm
 from .models import Review
@@ -39,21 +40,32 @@ def review_document(request, document_id: int):
     doc = get_object_or_404(Document, pk=document_id)
     instance = Review.objects.filter(document=doc).first()
 
+    classificacoes = list(doc.classificacoes.all().order_by("-created_at"))
+    classificacao_atual = classificacoes[0] if classificacoes else None
+    ia_class = classificacao_atual.classificacao if classificacao_atual else None
+    eh_duvidoso = ia_class == Classification.Classificacao.DUVIDOSO
+
     if request.method == "POST":
-        form = ReviewForm(request.POST, instance=instance)
+        form = ReviewForm(request.POST, instance=instance, classificacao_ia=ia_class)
         if form.is_valid():
             review = form.save(commit=False)
             review.document = doc
             review.revisor = request.user
             review.save()
             messages.success(request, f"Documento marcado como {review.get_decisao_display().lower()}.")
-            proximo = _fila_qs().exclude(pk=doc.pk).first()
-            if proximo:
-                return redirect("reviews:review", document_id=proximo.pk)
-            messages.info(request, "Fila de revisao zerada. Bom trabalho!")
-            return redirect("reviews:queue")
+            # Duvidoso segue o fluxo de fila (avanca para o proximo pendente).
+            # "Validar" de um nao-duvidoso volta para o proprio documento.
+            if eh_duvidoso:
+                proximo = _fila_qs().exclude(pk=doc.pk).first()
+                if proximo:
+                    return redirect("reviews:review", document_id=proximo.pk)
+                messages.info(request, "Fila de revisao zerada. Bom trabalho!")
+                return redirect("reviews:queue")
+            return redirect(doc.get_absolute_url())
     else:
-        form = ReviewForm(instance=instance)
+        form = ReviewForm(instance=instance, classificacao_ia=ia_class)
+
+    termo_buscado = next((c.termo_buscado for c in classificacoes if c.termo_buscado), "")
 
     return render(
         request,
@@ -61,7 +73,11 @@ def review_document(request, document_id: int):
         {
             "doc": doc,
             "form": form,
-            "classificacao_atual": doc.classificacao_atual,
+            "classificacao_atual": classificacao_atual,
             "existente": instance,
+            "eh_duvidoso": eh_duvidoso,
+            "decisao_concordante": form.decisao_concordante(),
+            "paginas_ato": _paginas_do_ato(doc, classificacoes),
+            "termo_buscado": termo_buscado,
         },
     )

@@ -6,7 +6,7 @@
   <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
     <div>
       <h1 style="font-size:20px; font-weight:600; margin:0;">
-        Revisao {% include "_partials/_hum_tag.html" %}
+        {% if eh_duvidoso %}Revisao{% else %}Validar{% endif %} {% include "_partials/_hum_tag.html" %}
       </h1>
       <p class="t-mono" style="font-size:11px; color:var(--t-ink-3); margin:4px 0 0;">
         doc #{{ doc.id }} · {{ doc.data_pub }} · ano {{ doc.ano }}
@@ -31,11 +31,7 @@
         </div>
       </div>
 
-      {% if doc.caminho_pdf %}
-        <div class="t-card" style="padding:0; overflow:hidden;">
-          {% include "_partials/_pdf_viewer.html" with pdf_path=doc.caminho_pdf height="640px" viewer_id="review" %}
-        </div>
-      {% endif %}
+      {% include "_partials/_pdf_marker.html" %}
 
       <div class="t-card" style="padding:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 8px;">
@@ -78,13 +74,26 @@
           {% if existente %}Atualizar revisao{% else %}Minha revisao{% endif %}
         </p>
 
+        {% if decisao_concordante %}
+          <p class="t-help" style="margin:0;">
+            A IA classificou como <strong>{{ classificacao_atual.get_classificacao_display }}</strong>.
+            Marque a opcao em verde para <strong>concordar</strong> (sem justificar) ou escolha outra para
+            <strong>discordar</strong> — nesse caso, a justificativa abaixo e obrigatoria.
+          </p>
+        {% endif %}
+
         <div style="display:flex; flex-direction:column; gap:6px;">
           {% for radio in form.decisao %}
-            <label style="display:flex; align-items:center; gap:8px; padding:8px 10px;
-                          border:1px solid var(--t-rule); border-radius:6px; cursor:pointer;
-                          font-size:13px; color:var(--t-ink-2);">
+            <label style="display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:6px; cursor:pointer;
+                          font-size:13px; color:var(--t-ink-2);
+                          border:1px solid {% if radio.data.value == decisao_concordante %}color-mix(in oklab, var(--t-ok) 55%, var(--t-rule)){% else %}var(--t-rule){% endif %};">
               {{ radio.tag }}
               <span>{{ radio.choice_label }}</span>
+              {% if radio.data.value == decisao_concordante %}
+                <span class="t-mono" style="font-size:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;
+                      padding:1px 5px; border-radius:3px; color:var(--t-ok);
+                      background:color-mix(in oklab, var(--t-ok) 14%, transparent);">concorda c/ IA</span>
+              {% endif %}
               <span class="t-mono" style="margin-left:auto; font-size:9px; color:var(--t-ink-3);">
                 {% if forloop.counter == 1 %}E{% elif forloop.counter == 2 %}R{% elif forloop.counter == 3 %}S{% else %}I{% endif %}
               </span>
@@ -96,8 +105,12 @@
         </div>
 
         <div>
-          <label class="t-label">Comentario</label>
+          <label class="t-label">Justificativa</label>
           {{ form.comentario }}
+          <p class="t-help" style="margin:6px 0 0;">Obrigatoria apenas se discordar da IA.</p>
+          {% if form.comentario.errors %}
+            <p class="t-mono" style="font-size:11px; color:var(--t-err); margin:4px 0 0;">{{ form.comentario.errors.0 }}</p>
+          {% endif %}
         </div>
 
         <button class="t-btn t-btn-primary" style="justify-content:center; padding:8px;">
