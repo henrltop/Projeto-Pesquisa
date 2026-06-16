@@ -162,7 +162,9 @@ class OpenAIClassifier:
             # a verificacao (mesma postura do delimitador, que usa requests verify=False).
             if verify_ssl is None:
                 verify_ssl = False
-            kwargs["http_client"] = httpx.Client(verify=verify_ssl, timeout=httpx.Timeout(120.0))
+            # Timeout generoso: modelos de raciocinio (ex.: gpt-oss:20b) ficam lentos
+            # quando o servidor esta sob carga (varios benchmarks ao mesmo tempo).
+            kwargs["http_client"] = httpx.Client(verify=verify_ssl, timeout=httpx.Timeout(300.0))
         self.client = OpenAI(**kwargs)
         self.model = model
         self.is_openwebui = bool(base_url)
