@@ -82,19 +82,23 @@ Binário, classe positiva = **relevante**. A classe `erro` (falha de formato) é
 
 - precisão, recall, F1, acurácia, matriz de confusão 2×2 (vs. humano);
 - **cobertura**: documentos do gabarito efetivamente classificados pelo modelo;
-- **taxa de erro**: proporção de falhas de formato.
+- **taxa de erro**: proporção de falhas de formato;
+- **tempo por documento**: mediana do intervalo entre classificações consecutivas
+  (robusta a pausas). É tempo **fim-a-fim** — inclui o delimitador e os downloads
+  do IOMAT —, **não** a inferência pura do classificador.
 
 ## Resultados atuais (binário, vs. validação humana)
 
-| Modelo | Cobertura | Erro fmt | Precisão | Recall | F1 | Acurácia |
-|---|---|---|---|---|---|---|
-| gpt-oss:20b ⚠️parcial | 69% | 5% | 0,73 | 0,78 | **0,76** | **0,70** |
-| qwen3:8b | 93% | 2% | 0,57 | **0,87** | 0,69 | 0,57 |
-| qwen2.5:7b | 89% | 5% | 0,66 | 0,62 | 0,64 | 0,60 |
-| gemma4:e4b ⛔contaminado | 92% | 0% | 0,70 | 0,31 | 0,43 | 0,53 |
+| Modelo | Cobertura | Erro fmt | Precisão | Recall | F1 | Acurácia | Tempo/doc |
+|---|---|---|---|---|---|---|---|
+| gpt-oss:20b | 83% | 6% | 0,71 | 0,76 | **0,73** | **0,68** | 41 s |
+| qwen3:8b | 93% | 2% | 0,57 | **0,87** | 0,69 | 0,57 | 59 s |
+| qwen2.5:7b | 89% | 5% | 0,66 | 0,62 | 0,64 | 0,60 | 29 s |
+| gemma4:e4b ⛔contaminado | 92% | 0% | 0,70 | 0,31 | 0,43 | 0,53 | 29 s |
 
-> Os números do gemma e a cobertura do gpt-oss mudam ao re-rodar os jobs
-> pendentes. Rode `gerar_metricas.py` de novo depois disso.
+> O gemma segue contaminado (os 100 "duvidosos" pré-correção derrubam o recall);
+> os números dele só melhoram ao re-rodar o job com o código atual. Rode
+> `gerar_metricas.py` de novo depois disso.
 
 ## Saídas
 
@@ -112,4 +116,5 @@ Binário, classe positiva = **relevante**. A classe `erro` (falha de formato) é
 - `03_precisao_recall_f1.png`
 - `04_acuracia_cobertura.png`
 - `05_taxa_erro.png`
-- `06_matrizes_confusao.png`
+- `06_tempo_por_modelo.png` — tempo mediano por documento (fim-a-fim).
+- `07_matrizes_confusao.png`

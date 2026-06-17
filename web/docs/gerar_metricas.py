@@ -51,7 +51,7 @@ from django.db.models import Count  # noqa: E402
 from apps.documents.models import Document  # noqa: E402
 from apps.documents.models import Classification  # noqa: E402
 from apps.reviews.models import Review  # noqa: E402
-from apps.searches.models import SearchJob  # noqa: E402
+from apps.searches.models import PipelineStage, SearchJob  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Configuracao
@@ -103,6 +103,29 @@ def classes_por_doc(job: SearchJob) -> dict[int, str]:
     ):
         out[doc_id] = classe
     return out
+
+
+def tempo_por_job(job: SearchJob) -> dict:
+    """Tempo de processamento por documento naquele job.
+
+    Usa a MEDIANA do intervalo entre classificacoes consecutivas (robusta a
+    pausas/idle), descartando saltos > 1 h. E tempo fim-a-fim (inclui o
+    delimitador e os downloads do IOMAT), nao inferencia pura do classificador.
+    """
+    import statistics
+
+    times = list(
+        Classification.objects.filter(search_job=job)
+        .order_by("created_at").values_list("created_at", flat=True)
+    )
+    deltas = [
+        (times[i + 1] - times[i]).total_seconds() for i in range(len(times) - 1)
+    ]
+    deltas = [d for d in deltas if 0 < d < 3600]
+    mediana = statistics.median(deltas) if deltas else None
+    stage = PipelineStage.objects.filter(search_job=job, codigo="classificacao").first()
+    total = stage.duracao_segundos if stage else None
+    return {"mediana_doc_seg": mediana, "total_stage_seg": total, "n": len(times)}
 
 
 def gabarito_humano() -> dict[int, str]:
@@ -256,6 +279,7 @@ def main() -> None:
             })
 
         mb = metricas_binarias(pares_bin)
+        tempo = tempo_por_job(job)
         matrizes[modelo] = {"binaria": mb, "n_erros": n_erro}
         metr_rows.append({
             "modelo": modelo, "job_id": job.id, "status_job": job.status,
@@ -264,6 +288,8 @@ def main() -> None:
             "taxa_erro": n_erro / n_modelo_total if n_modelo_total else 0.0,
             "precisao": mb["precisao"], "recall": mb["recall"], "f1": mb["f1"],
             "acuracia": mb["acuracia"],
+            "tempo_mediano_doc_seg": tempo["mediana_doc_seg"],
+            "tempo_total_stage_seg": tempo["total_stage_seg"],
         })
 
     # composicao do gabarito humano (decisoes originais + binario)
@@ -303,10 +329,12 @@ def main() -> None:
           f"{comp_bin.get('nao_relevante', 0)} nao-relevantes "
           f"(decisoes: {dict(comp_humano)})")
     print("\n=== METRICAS (binario, vs validacao humana) ===")
-    print(f"{'modelo':16s} {'cob.':>5s} {'erro':>5s} {'prec':>5s} {'rec':>5s} {'F1':>6s} {'acc':>5s}")
+    print(f"{'modelo':16s} {'cob.':>5s} {'erro':>5s} {'prec':>5s} {'rec':>5s} {'F1':>6s} {'acc':>5s} {'t/doc':>7s}")
     for r in metr_rows:
+        t = r["tempo_mediano_doc_seg"]
+        tstr = f"{t:.0f}s" if t else "n/d"
         print(f"{r['modelo']:16s} {r['cobertura']*100:4.0f}% {r['taxa_erro']*100:4.0f}% "
-              f"{r['precisao']:.2f}  {r['recall']:.2f}  {r['f1']:.2f}  {r['acuracia']:.2f}")
+              f"{r['precisao']:.2f}  {r['recall']:.2f}  {r['f1']:.2f}  {r['acuracia']:.2f}  {tstr:>7s}")
     if aux["concordancia"] is not None:
         print(f"\n(aux.) modelo-assistente x humano: {aux['concordancia']*100:.1f}% "
               f"em {aux['n']} docs")
