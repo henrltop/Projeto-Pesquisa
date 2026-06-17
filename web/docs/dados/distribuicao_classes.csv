@@ -1,0 +1,5 @@
+modelo,super_relevante,relevante,duvidoso,irrelevante,erro
+gpt-oss:20b,36,53,5,45,8
+qwen2.5:7b,17,81,5,78,9
+qwen3:8b,95,63,8,23,3
+gemma4:e4b,11,36,100,40,0
