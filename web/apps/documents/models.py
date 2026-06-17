@@ -76,6 +76,10 @@ class Classification(models.Model):
         RELEVANTE = "relevante", "Relevante"
         DUVIDOSO = "duvidoso", "Duvidoso"
         IRRELEVANTE = "irrelevante", "Irrelevante"
+        # Falha de formato: o modelo nao devolveu JSON valido com o campo
+        # 'classificacao'. Guardamos a resposta_crua mesmo assim, para auditar
+        # no benchmark de modelos. Nao e uma decisao de relevancia.
+        ERRO = "erro", "Erro (formato)"
 
     document = models.ForeignKey(
         Document, on_delete=models.CASCADE, related_name="classificacoes",

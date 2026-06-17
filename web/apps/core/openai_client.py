@@ -91,7 +91,14 @@ Formato exato:
 
 
 class ClassificacaoParseError(Exception):
-    """Modelo retornou algo que nao consegui interpretar como JSON."""
+    """Modelo retornou algo que nao consegui interpretar como JSON.
+
+    Carrega a `resposta_crua` (texto bruto que o modelo devolveu) para que o
+    pipeline possa salva-la mesmo no erro, para auditoria do benchmark.
+    """
+    def __init__(self, mensagem: str, resposta_crua: str = ""):
+        super().__init__(mensagem)
+        self.resposta_crua = resposta_crua
 
 
 @dataclass
@@ -242,7 +249,8 @@ class OpenAIClassifier:
                     # Falha final: propaga pra task marcar como erro (nao como duvidoso silencioso)
                     raise ClassificacaoParseError(
                         f"Modelo nao retornou JSON valido apos {retries} tentativas. "
-                        f"Ultima resposta crua (trecho): {resposta_crua[:300]!r}"
+                        f"Ultima resposta crua (trecho): {resposta_crua[:300]!r}",
+                        resposta_crua=resposta_crua,
                     )
 
                 classe = (parsed.get("classificacao") or "").lower().strip()
@@ -265,7 +273,8 @@ class OpenAIClassifier:
                         continue
                     raise ClassificacaoParseError(
                         f"Modelo nao retornou 'classificacao' valida apos {retries} tentativas. "
-                        f"Ultima resposta (trecho): {resposta_crua[:300]!r}"
+                        f"Ultima resposta (trecho): {resposta_crua[:300]!r}",
+                        resposta_crua=resposta_crua,
                     )
 
                 usage = getattr(response, "usage", None)

@@ -12,7 +12,7 @@ Uso: {% include "_partials/_status_pill.html" with status=job.status label=job.g
 {% else %}
   {% if status == 'concluido' or status == 'done' or status == 'super_relevante' or status == 'relevante' or status == 'aprovado' %}
     <span class="t-pill done"><span class="t-pill-dot"></span><span>{{ label }}</span></span>
-  {% elif status == 'falhou' or status == 'failed' or status == 'cancelado' or status == 'irrelevante' or status == 'rejeitado' %}
+  {% elif status == 'falhou' or status == 'failed' or status == 'cancelado' or status == 'irrelevante' or status == 'rejeitado' or status == 'erro' %}
     <span class="t-pill failed"><span class="t-pill-dot"></span><span>{{ label }}</span></span>
   {% elif status == 'duvidoso' or status == 'warn' or status == 'ressalva' %}
     <span class="t-pill warn"><span class="t-pill-dot"></span><span>{{ label }}</span></span>
