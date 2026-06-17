@@ -54,7 +54,7 @@ Gabarito atual: **113 relevantes / 89 não-relevantes**.
 |---|---|---|
 | `qwen3:8b` | #6 (concluído) | ✅ limpo (pós-correção de erro de formato) |
 | `qwen2.5:7b` | #7 (concluído) | ✅ limpo |
-| `gpt-oss:20b` | #8 (em andamento) | ⚠️ **cobertura parcial (~69%)** — re-rodar quando concluir |
+| `gpt-oss:20b` | #8 (concluído) | ✅ concluído; cobertura 83% (os 17% restantes são falhas de formato + não processados) |
 | `gemma4:e4b` | #3 (concluído) | ⛔ **contaminado**: os 100 "duvidosos" são **100% falhas de formato** (pré-correção), não decisões. Recall artificialmente baixo. **Re-rodar.** |
 
 ### Sobre a contaminação do gemma (e o que mudou no código)
@@ -106,15 +106,77 @@ Binário, classe positiva = **relevante**. A classe `erro` (falha de formato) é
 - `comparativo_tidy.csv` — uma linha por (documento × modelo); fonte única para
   qualquer outro gráfico.
 - `distribuicao_classes.csv` — contagem de rótulos por modelo.
-- `metricas_modelos.csv` — precisão/recall/F1/acurácia/cobertura/erro por modelo.
+- `metricas_modelos.csv` — precisão/recall/F1/acurácia/cobertura/erro/tempo por modelo.
 - `matrizes_confusao.json` — matriz binária 2×2 por modelo.
 - `resumo.json` — tudo agregado + metadados (consumido pelo `plotar.py`).
 
-`graficos/`
-- `01_distribuicao_classes.png` — composição de rótulos por modelo.
-- `02_gabarito_humano.png` — composição do gabarito (decisões e binário).
+`graficos/` (cada uma descrita na seção abaixo)
+- `01_comparativo_humano_modelos.png`
+- `02_gabarito_humano.png`
 - `03_precisao_recall_f1.png`
-- `04_acuracia_cobertura.png`
-- `05_taxa_erro.png`
-- `06_tempo_por_modelo.png` — tempo mediano por documento (fim-a-fim).
-- `07_matrizes_confusao.png`
+- `04_completude.png`
+- `05_tempo_por_modelo.png`
+- `06_matrizes_confusao.png`
+
+## Descrição das figuras (para legendas do artigo)
+
+Texto pronto para adaptar como legenda. Em todas, **o gabarito é a validação
+humana** e a **classe positiva é "relevante"**.
+
+### 01 — Relevância: humano vs. modelos
+**Mostra:** quantos dos documentos cada um considerou relevante (verde) ou
+não-relevante (cinza); em vermelho, as falhas de formato dos modelos. A barra do
+humano, com contorno, é a referência (113 relevantes / 89 não).
+**Como ler:** compare a altura do bloco verde de cada modelo com a do humano.
+Acima de 113 → o modelo **super-sinaliza** relevância; abaixo → **subnotifica**.
+**Conclusão:** gpt-oss (103) é o mais próximo do humano; qwen3 infla muito (158);
+gemma subnotifica (47).
+
+### 02 — O gabarito humano
+**Mostra:** a distribuição das decisões manuais nos quatro níveis (super
+relevante, aprovado, ressalva, rejeitado).
+**Como ler / uso:** figura de **caracterização do conjunto de referência** (para
+a seção de metodologia). No binário: super + aprovado + ressalva = relevante;
+rejeitado = não-relevante.
+
+### 03 — Precisão, Recall e F1
+**Mostra:** as três métricas por modelo, contra o gabarito humano.
+**Como ler:** *Precisão* = dos que o modelo chamou de relevante, quantos o humano
+confirmou. *Recall* = dos relevantes do humano, quantos o modelo encontrou. *F1*
+= equilíbrio entre as duas (média harmônica).
+**Conclusão:** gpt-oss tem o melhor F1 (0,73); qwen3 tem recall altíssimo (0,87)
+mas precisão baixa (0,57) — encontra quase todos os relevantes, ao custo de
+muitos falsos positivos.
+
+### 04 — Completude
+**Mostra:** dos documentos do corpus, quantos cada modelo classificou com
+sucesso (teal), quantos falharam no formato (vermelho) e quantos não chegaram a
+ser processados (cinza claro).
+**Como ler:** é **robustez de execução — quanto** do corpus o modelo entregou —,
+**não qualidade**. A qualidade (acurácia, F1) está na tabela e nas figuras 03 e
+06. Aqui só importa o tamanho do bloco teal.
+**Conclusão:** qwen3 e gemma cobriram quase tudo; gpt-oss foi o que mais deixou
+de fora (entre falhas de formato e documentos não processados).
+
+### 05 — Tempo por documento
+**Mostra:** a mediana de segundos por documento, do mais rápido (verde) ao mais
+lento (vermelho).
+**Como ler:** é tempo **fim-a-fim** do pipeline (delimitador local + download +
+classificação), **não** a inferência pura do classificador. Serve para comparar o
+custo de processamento **relativo** entre os modelos.
+**Conclusão:** qwen2.5 e gemma (~29 s) são os mais rápidos; gpt-oss 41 s; qwen3
+59 s.
+
+### 06 — Matrizes de confusão
+**Mostra:** para cada modelo, a matriz 2×2 contra o humano. Linhas = decisão
+humana; colunas = predição do modelo. A diagonal são os acertos; cada célula traz
+a contagem e o percentual por linha.
+**Como ler:** célula inferior-direita = verdadeiros relevantes; superior-direita
+= falsos positivos; inferior-esquerda = falsos negativos.
+**Conclusão:** qwen3 quase não tem falsos negativos (13) mas muitos falsos
+positivos (67); gemma é o oposto (73 falsos negativos); gpt-oss é o mais
+equilibrado.
+
+> **Acurácia** não tem figura própria (era a fonte de confusão do gráfico
+> anterior): ela é redundante com o F1 + a matriz de confusão, então fica apenas
+> na tabela de resultados acima.

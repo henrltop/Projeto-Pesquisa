@@ -1,6 +1,7 @@
 {
-  "gerado_em": "2026-06-17T11:34:28+00:00",
+  "gerado_em": "2026-06-17T11:57:22+00:00",
   "modo_gabarito": "humano",
+  "corpus_n_docs": 203,
   "gabarito": {
     "fonte": "validacao humana (tabela Review)",
     "n_docs": 202,

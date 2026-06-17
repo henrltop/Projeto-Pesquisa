@@ -3,6 +3,14 @@
 Lê docs/dados/resumo.json e escreve PNGs estilizados em docs/graficos/.
 Não acessa o banco. O gabarito é a validação humana (tabela Review).
 
+Conjunto de figuras (descritas no README):
+    01  Relevância: humano x modelos (binário, simplificado)
+    02  Composição do gabarito humano (decisões originais)
+    03  Precisão / Recall / F1
+    04  Completude (classificados x falhas x não processados)
+    05  Tempo por documento
+    06  Matrizes de confusão
+
 Uso:
     python docs/plotar.py
 """
@@ -26,22 +34,17 @@ GRAF_DIR.mkdir(exist_ok=True)
 # ---------------------------------------------------------------------------
 # Tema
 # ---------------------------------------------------------------------------
-TINTA = "#1d3557"      # titulos
-TINTA2 = "#6c757d"     # subtitulos
+TINTA = "#1d3557"
+TINTA2 = "#6c757d"
 GRID = "#e9ecef"
 
+VERDE = "#8cce8a"
+CINZA = "#ced4da"
+VERMELHO = "#bc4749"
+TEAL = "#2a9d8f"
+CINZA_CLARO = "#e9ecef"
+
 PALETA_PRF = {"precisao": "#89c2d9", "recall": "#468faf", "f1": "#013a63"}
-CORES_CLASSE = {
-    "super_relevante": "#1b7837",
-    "relevante": "#8cce8a",
-    "duvidoso": "#f4a259",
-    "irrelevante": "#ced4da",
-    "erro": "#bc4749",
-}
-ROTULO_CLASSE = {
-    "super_relevante": "Super relevante", "relevante": "Relevante",
-    "duvidoso": "Duvidoso", "irrelevante": "Irrelevante", "erro": "Erro (formato)",
-}
 CORES_HUMANO = {
     "super_relevante": "#1b7837", "aprovado": "#8cce8a",
     "ressalva": "#f4a259", "rejeitado": "#bc4749",
@@ -54,23 +57,14 @@ ROTULO_HUMANO = {
 
 def _tema() -> None:
     plt.rcParams.update({
-        "figure.facecolor": "white",
-        "axes.facecolor": "white",
-        "savefig.facecolor": "white",
-        "axes.edgecolor": "#ced4da",
-        "axes.linewidth": 1.0,
-        "axes.grid": True,
-        "axes.axisbelow": True,
-        "grid.color": GRID,
-        "grid.linewidth": 1.0,
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "font.family": "DejaVu Sans",
-        "font.size": 11,
-        "xtick.color": "#495057",
-        "ytick.color": "#495057",
-        "axes.labelcolor": "#495057",
-        "figure.dpi": 160,
+        "figure.facecolor": "white", "axes.facecolor": "white",
+        "savefig.facecolor": "white", "axes.edgecolor": "#ced4da",
+        "axes.linewidth": 1.0, "axes.grid": True, "axes.axisbelow": True,
+        "grid.color": GRID, "grid.linewidth": 1.0,
+        "axes.spines.top": False, "axes.spines.right": False,
+        "font.family": "DejaVu Sans", "font.size": 11,
+        "xtick.color": "#495057", "ytick.color": "#495057",
+        "axes.labelcolor": "#495057", "figure.dpi": 160,
     })
 
 
@@ -80,6 +74,16 @@ def _cabecalho(ax, titulo: str, subtitulo: str = "") -> None:
     if subtitulo:
         ax.text(0.0, 1.075, subtitulo, transform=ax.transAxes, fontsize=9.5,
                 color=TINTA2, va="top")
+
+
+def _so_grid_y(ax) -> None:
+    ax.grid(axis="x", visible=False)
+    ax.grid(axis="y", visible=True)
+
+
+def _so_grid_x(ax) -> None:
+    ax.grid(axis="y", visible=False)
+    ax.grid(axis="x", visible=True)
 
 
 def carregar() -> dict:
@@ -93,78 +97,81 @@ def salvar(fig, nome: str) -> None:
     print(f"  -> {nome}")
 
 
-def _so_grid_y(ax) -> None:
-    ax.grid(axis="x", visible=False)
-    ax.grid(axis="y", visible=True)
-
-
-def _so_grid_x(ax) -> None:
-    ax.grid(axis="y", visible=False)
-    ax.grid(axis="x", visible=True)
+def _dist_por_modelo(resumo: dict) -> dict[str, dict]:
+    return {d["modelo"]: d for d in resumo["distribuicao"]}
 
 
 # ---------------------------------------------------------------------------
-def g_distribuicao(resumo: dict) -> None:
-    dist = resumo["distribuicao"]
-    modelos = [d["modelo"] for d in dist]
-    classes = ["super_relevante", "relevante", "duvidoso", "irrelevante", "erro"]
-    fig, ax = plt.subplots(figsize=(9.5, 5.6))
-    base = np.zeros(len(modelos))
-    for c in classes:
-        vals = np.array([d.get(c, 0) for d in dist], dtype=float)
-        ax.bar(modelos, vals, bottom=base, label=ROTULO_CLASSE[c],
-               color=CORES_CLASSE[c], edgecolor="white", linewidth=1.2, width=0.62)
+def g_comparativo(resumo: dict) -> None:
+    """01 - Relevância: o que o humano julgou x o que cada modelo classificou."""
+    dist = _dist_por_modelo(resumo)
+    ordem_modelos = [m["modelo"] for m in resumo["modelos"]]
+    gbin = resumo["gabarito"]["composicao_binaria"]
+
+    rotulos = ["Humano\n(gabarito)"] + ordem_modelos
+    relevante = [gbin.get("relevante", 0)]
+    naorel = [gbin.get("nao_relevante", 0)]
+    erro = [0]
+    for m in ordem_modelos:
+        d = dist[m]
+        relevante.append(d.get("super_relevante", 0) + d.get("relevante", 0))
+        naorel.append(d.get("duvidoso", 0) + d.get("irrelevante", 0))
+        erro.append(d.get("erro", 0))
+
+    x = np.arange(len(rotulos))
+    fig, ax = plt.subplots(figsize=(10, 5.8))
+    segmentos = [
+        (relevante, VERDE, "Relevante"),
+        (naorel, CINZA, "Não-relevante"),
+        (erro, VERMELHO, "Erro (formato)"),
+    ]
+    base = np.zeros(len(rotulos))
+    # destaca a barra do humano com contorno
+    bordas = ["#1d3557"] + ["white"] * len(ordem_modelos)
+    larguras = [1.8] + [1.0] * len(ordem_modelos)
+    for vals, cor, nome in segmentos:
+        vals = np.array(vals, dtype=float)
+        ax.bar(x, vals, bottom=base, color=cor, label=nome,
+               edgecolor=bordas, linewidth=larguras, width=0.6)
         for i, v in enumerate(vals):
-            if v >= 8:
+            if v >= 6:
                 ax.text(i, base[i] + v / 2, int(v), ha="center", va="center",
-                        fontsize=8.5, color="#1f2d3d", fontweight="bold")
+                        fontsize=9, fontweight="bold", color="#1f2d3d")
         base += vals
     _so_grid_y(ax)
+    ax.set_xticks(x, rotulos, fontsize=10)
     ax.set_ylabel("Número de documentos")
-    ax.set_axisbelow(True)
-    _cabecalho(ax, "Como cada modelo distribui seus rótulos",
-               "Composição das classes atribuídas por modelo (corpus: 203 documentos)")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.09), ncol=5,
-              frameon=False, fontsize=8.8, handlelength=1.2)
-    ax.tick_params(axis="x", labelsize=10)
-    salvar(fig, "01_distribuicao_classes.png")
+    _cabecalho(ax, "Relevância: humano vs. modelos",
+               "Quantos documentos cada um considerou relevante (versão binária simplificada)")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3,
+              frameon=False, fontsize=9.5)
+    salvar(fig, "01_comparativo_humano_modelos.png")
 
 
 def g_gabarito(resumo: dict) -> None:
+    """02 - Composição do gabarito humano (decisões originais)."""
     comp = resumo["gabarito"]["composicao_decisoes"]
-    binr = resumo["gabarito"]["composicao_binaria"]
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.6),
-                                   gridspec_kw={"wspace": 0.25})
     ordem = ["super_relevante", "aprovado", "ressalva", "rejeitado"]
     vals = [comp.get(k, 0) for k in ordem]
-    b = ax1.bar([ROTULO_HUMANO[k] for k in ordem], vals,
-                color=[CORES_HUMANO[k] for k in ordem], width=0.66)
-    ax1.bar_label(b, fontsize=10, fontweight="bold", padding=2, color=TINTA)
-    _so_grid_y(ax1)
-    ax1.set_ylabel("Documentos")
-    ax1.set_title("Decisões originais", fontsize=11, color=TINTA2, pad=6)
-    ax1.tick_params(axis="x", labelsize=9.5)
-
-    bvals = [binr.get("relevante", 0), binr.get("nao_relevante", 0)]
-    b2 = ax2.bar(["Relevante", "Não-relevante"], bvals,
-                 color=["#8cce8a", "#ced4da"], width=0.55)
-    ax2.bar_label(b2, fontsize=11, fontweight="bold", padding=2, color=TINTA)
-    _so_grid_y(ax2)
-    ax2.set_title("Agrupado em binário", fontsize=11, color=TINTA2, pad=6)
-
-    fig.text(0.0, 1.02, "O gabarito humano", fontsize=15.5, fontweight="bold",
-             color=TINTA, va="bottom", transform=ax1.transAxes)
-    fig.text(0.0, 0.965, "Validação manual de 202 documentos (tabela Review)",
-             fontsize=9.5, color=TINTA2, va="bottom", transform=ax1.transAxes)
+    fig, ax = plt.subplots(figsize=(8.5, 4.8))
+    b = ax.bar([ROTULO_HUMANO[k] for k in ordem], vals,
+               color=[CORES_HUMANO[k] for k in ordem], width=0.62)
+    ax.bar_label(b, fontsize=11, fontweight="bold", padding=3, color=TINTA)
+    _so_grid_y(ax)
+    ax.set_ylabel("Documentos")
+    n = resumo["gabarito"]["n_docs"]
+    _cabecalho(ax, "O gabarito humano",
+               f"Decisões da validação manual ({n} documentos); relevante = super + aprovado + ressalva")
     salvar(fig, "02_gabarito_humano.png")
 
 
 def g_pr_f1(resumo: dict) -> None:
+    """03 - Precisão / Recall / F1."""
     mods = resumo["modelos"]
     modelos = [m["modelo"] for m in mods]
+    rotulos = {"precisao": "Precisão", "recall": "Recall", "f1": "F1"}
     x = np.arange(len(modelos))
     w = 0.26
-    rotulos = {"precisao": "Precisão", "recall": "Recall", "f1": "F1"}
     fig, ax = plt.subplots(figsize=(10, 5.6))
     for i, chave in enumerate(["precisao", "recall", "f1"]):
         vals = [m[chave] for m in mods]
@@ -181,54 +188,50 @@ def g_pr_f1(resumo: dict) -> None:
     salvar(fig, "03_precisao_recall_f1.png")
 
 
-def g_acuracia_cobertura(resumo: dict) -> None:
-    mods = resumo["modelos"]
-    modelos = [m["modelo"] for m in mods]
-    acc = [m["acuracia"] for m in mods]
-    cob = [m["cobertura"] for m in mods]
-    x = np.arange(len(modelos))
-    w = 0.38
-    fig, ax = plt.subplots(figsize=(10, 5.6))
-    b1 = ax.bar(x - w / 2, acc, w, label="Acurácia (binária)", color="#2c7da0",
-                edgecolor="white", linewidth=0.6)
-    b2 = ax.bar(x + w / 2, cob, w, label="Cobertura do gabarito", color="#a8dadc",
-                edgecolor="white", linewidth=0.6)
-    ax.bar_label(b1, fmt="%.2f", fontsize=8, padding=2, color="#33415c")
-    ax.bar_label(b2, fmt="%.2f", fontsize=8, padding=2, color="#33415c")
-    aux = resumo.get("referencia_auxiliar", {}).get("concordancia")
-    if aux is not None:
-        ax.axhline(aux, ls=(0, (5, 4)), color="#adb5bd", lw=1.3)
-        ax.text(len(modelos) - 0.5, aux + 0.015,
-                f"modelo-assistente × humano = {aux*100:.0f}%",
-                color="#868e96", ha="right", fontsize=8.5, style="italic")
+def g_completude(resumo: dict) -> None:
+    """04 - Quanto do corpus cada modelo conseguiu classificar."""
+    dist = _dist_por_modelo(resumo)
+    ordem = [m["modelo"] for m in resumo["modelos"]]
+    corpus = resumo.get("corpus_n_docs", 203)
+    validos, erros, faltando = [], [], []
+    for m in ordem:
+        d = dist[m]
+        v = sum(d.get(c, 0) for c in
+                ("super_relevante", "relevante", "duvidoso", "irrelevante"))
+        e = d.get("erro", 0)
+        validos.append(v)
+        erros.append(e)
+        faltando.append(max(0, corpus - v - e))
+
+    x = np.arange(len(ordem))
+    fig, ax = plt.subplots(figsize=(10, 5.4))
+    base = np.zeros(len(ordem))
+    for vals, cor, nome in [
+        (validos, TEAL, "Classificados"),
+        (erros, VERMELHO, "Falha de formato"),
+        (faltando, CINZA_CLARO, "Não processados"),
+    ]:
+        vals = np.array(vals, dtype=float)
+        ax.bar(x, vals, bottom=base, color=cor, label=nome, width=0.6,
+               edgecolor="white", linewidth=1.0)
+        for i, v in enumerate(vals):
+            if v >= 5:
+                ax.text(i, base[i] + v / 2, int(v), ha="center", va="center",
+                        fontsize=9, fontweight="bold",
+                        color="white" if cor == TEAL else "#1f2d3d")
+        base += vals
     _so_grid_y(ax)
-    ax.set_xticks(x, modelos, fontsize=10)
-    ax.set_ylim(0, 1.08)
-    ax.set_ylabel("Proporção")
-    _cabecalho(ax, "Acurácia e cobertura por modelo",
-               "Acurácia = acerto vs. humano  •  Cobertura = fração do corpus que o modelo classificou")
-    ax.legend(loc="upper right", frameon=False, fontsize=9.5)
-    salvar(fig, "04_acuracia_cobertura.png")
-
-
-def g_taxa_erro(resumo: dict) -> None:
-    mods = sorted(resumo["modelos"], key=lambda m: m["taxa_erro"])
-    modelos = [m["modelo"] for m in mods]
-    erro = [m["taxa_erro"] * 100 for m in mods]
-    fig, ax = plt.subplots(figsize=(9, 4.8))
-    barras = ax.barh(modelos, erro, color="#bc4749", height=0.6)
-    ax.bar_label(barras, fmt="%.1f%%", fontsize=10, padding=4,
-                 fontweight="bold", color="#7a2e30")
-    _so_grid_x(ax)
-    ax.set_xlabel("Falhas de formato (%)")
-    ax.set_xlim(0, max(erro) * 1.25 if erro else 1)
-    ax.invert_yaxis()
-    _cabecalho(ax, "Confiabilidade de formato",
-               "Respostas que não vieram no JSON esperado (menor é melhor)")
-    salvar(fig, "05_taxa_erro.png")
+    ax.set_xticks(x, ordem, fontsize=10)
+    ax.set_ylabel("Documentos")
+    _cabecalho(ax, "Completude: quanto cada modelo classificou",
+               f"De {corpus} documentos do corpus: classificados, falhas de formato e não processados")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=3,
+              frameon=False, fontsize=9.5)
+    salvar(fig, "04_completude.png")
 
 
 def g_tempo(resumo: dict) -> None:
+    """05 - Tempo mediano por documento."""
     mods = [m for m in resumo["modelos"] if m.get("tempo_mediano_doc_seg")]
     mods = sorted(mods, key=lambda m: m["tempo_mediano_doc_seg"])
     modelos = [m["modelo"] for m in mods]
@@ -246,10 +249,11 @@ def g_tempo(resumo: dict) -> None:
     ax.invert_yaxis()
     _cabecalho(ax, "Tempo de processamento por documento",
                "Mediana fim-a-fim (inclui delimitador + download); não é inferência pura do classificador")
-    salvar(fig, "06_tempo_por_modelo.png")
+    salvar(fig, "05_tempo_por_modelo.png")
 
 
 def g_matrizes(resumo: dict) -> None:
+    """06 - Matrizes de confusão binárias."""
     matrizes = resumo["matrizes"]
     modelos = list(matrizes.keys())
     n = len(modelos)
@@ -268,7 +272,6 @@ def g_matrizes(resumo: dict) -> None:
         ax.set_ylabel("Gabarito (humano)", fontsize=9)
         ax.set_title(f"{modelo}   ·   F1 = {mb['f1']:.2f}", fontsize=11,
                      fontweight="bold", color=TINTA, pad=8)
-        total = mat.sum()
         thr = mat.max() / 2 if mat.max() else 0
         for i in range(2):
             linha = mat[i].sum()
@@ -287,18 +290,17 @@ def g_matrizes(resumo: dict) -> None:
     fig.suptitle("Matrizes de confusão (binário) vs. validação humana",
                  fontsize=15.5, fontweight="bold", color=TINTA, x=0.02, ha="left")
     fig.tight_layout(rect=[0, 0, 1, 0.96])
-    salvar(fig, "07_matrizes_confusao.png")
+    salvar(fig, "06_matrizes_confusao.png")
 
 
 def main() -> None:
     _tema()
     resumo = carregar()
     print("Gerando gráficos estilizados em docs/graficos/ ...")
-    g_distribuicao(resumo)
+    g_comparativo(resumo)
     g_gabarito(resumo)
     g_pr_f1(resumo)
-    g_acuracia_cobertura(resumo)
-    g_taxa_erro(resumo)
+    g_completude(resumo)
     g_tempo(resumo)
     g_matrizes(resumo)
     print("Concluído.")

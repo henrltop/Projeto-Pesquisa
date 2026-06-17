@@ -304,9 +304,14 @@ def main() -> None:
     with open(DADOS_DIR / "matrizes_confusao.json", "w", encoding="utf-8") as fh:
         json.dump(matrizes, fh, ensure_ascii=False, indent=2)
 
+    corpus_n = len(classes_por_doc(job_ref)) if job_ref else max(
+        (len(classes_por_doc(j)) for j in jobs_modelos.values()), default=0
+    )
+
     resumo = {
         "gerado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "modo_gabarito": modo,
+        "corpus_n_docs": corpus_n,
         "gabarito": {
             "fonte": gab_fonte, "n_docs": n_gab,
             "composicao_decisoes": dict(comp_humano),
