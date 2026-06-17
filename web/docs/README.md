@@ -75,6 +75,32 @@ Após a correção, essas respostas passam por *retry* com reforço e, se
 persistirem, viram a classe `erro` (com a resposta crua salva), ficando **fora**
 do cálculo de métricas em vez de poluir como "duvidoso".
 
+## Ambiente de execução (hardware e software)
+
+Os modelos **locais** rodaram em um servidor institucional do IFMT, via Ollama.
+A medição de tempo (figura 05) é específica deste hardware.
+
+| Componente | Especificação |
+|---|---|
+| Sistema operacional | Ubuntu 24.04.4 LTS (kernel 6.8.0-107) |
+| CPU | AMD Ryzen 5 9600X — 6 núcleos / 12 threads (Zen 5) |
+| Memória | 30 GiB RAM + 8 GiB swap |
+| GPU | NVIDIA GeForce RTX 5060 Ti — **16 GB VRAM** |
+| Driver / CUDA | 580.126.09 / CUDA 13.0 |
+| Armazenamento | SSD NVMe (739 GB) |
+| Runtime de inferência | Ollama 0.20.3 |
+| Janela de contexto (classificador) | 4096 tokens |
+
+**Notas relevantes para os resultados:**
+- **GPU única de 16 GB** → a classificação é **sequencial** (um modelo por vez).
+  Modelos grandes ocupam quase toda a VRAM (gpt-oss:20b ≈ 13 GB), então alternar
+  entre o **delimitador** (gpt-oss local) e o **classificador** pode exigir
+  recarregar o modelo na GPU — o que contribui para o tempo de **~3–4 h por busca**.
+- Footprint aproximado: modelos 8B ≈ 5–6 GB; 14B ≈ 9 GB; 20B ≈ 13 GB.
+- O classificador usa contexto de **4096** (limite do endpoint compatível com
+  OpenAI); o delimitador usa o endpoint nativo do Ollama com 8192.
+- O modelo de referência (gabarito) é de nuvem (OpenAI) — não usa esta GPU.
+
 ## Métricas calculadas
 
 Binário, classe positiva = **relevante**. A classe `erro` (falha de formato) é
