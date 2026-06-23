@@ -29,7 +29,8 @@ sudo apt update && sudo apt install -y \
 ## 2. Usuário de sistema + código
 
 ```bash
-sudo useradd --system --create-home --home-dir /srv/iomat --shell /bin/bash iomat
+sudo useradd --system --home-dir /srv/iomat --shell /bin/bash iomat
+sudo install -d -o iomat -g iomat /srv/iomat
 sudo -u iomat git clone https://github.com/henrltop/Projeto-Pesquisa.git /srv/iomat
 ```
 
@@ -79,6 +80,8 @@ DELIMITADOR_BASE_URL=http://localhost:11434
 ## 6. Migrar + estáticos + superusuário (banco limpo)
 
 ```bash
+# manage.py usa settings.dev por padrao; force prod nesta shell:
+export DJANGO_SETTINGS_MODULE=config.settings.prod
 python manage.py migrate
 python manage.py collectstatic --noinput
 python manage.py createsuperuser
