@@ -108,14 +108,17 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## 9. HTTPS (Let's Encrypt)
+## 9. HTTPS
 
-```bash
-sudo certbot --nginx -d seudominio.edu.br
-```
+**Se a faculdade termina o TLS num proxy central** (caso do IFMT): **não rode
+certbot aqui**. O `nginx.conf` já envia `X-Forwarded-Proto: https`, então o
+Django trata a requisição como segura. Peça à TI:
 
-> Faça o **certbot ANTES de testar o login**: o `prod.py` usa cookies `Secure`,
-> então a sessão só funciona sob HTTPS.
+> encaminhar `seudominio` → `http://<IP-deste-servidor>:80`, preservando o
+> header `Host` e enviando `X-Forwarded-Proto: https`.
+
+Se um dia o servidor tiver IP público direto (sem proxy), aí sim:
+`sudo certbot --nginx -d seudominio` (e o certbot cuida do bloco 443).
 
 ## 10. Firewall (se houver ufw)
 
