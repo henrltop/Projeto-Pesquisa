@@ -11,6 +11,10 @@ if not FIELD_ENCRYPTION_KEY:  # noqa: F405
 if not ALLOWED_HOSTS:  # noqa: F405
     raise RuntimeError("DJANGO_ALLOWED_HOSTS precisa listar os dominios em producao.")
 
+# Django 5 exige a origem confiavel para POST via HTTPS atras do proxy (Nginx),
+# senao o login por formulario falha com erro de CSRF. Derivado dos ALLOWED_HOSTS.
+CSRF_TRUSTED_ORIGINS = [f"https://{h}" for h in ALLOWED_HOSTS]  # noqa: F405
+
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True

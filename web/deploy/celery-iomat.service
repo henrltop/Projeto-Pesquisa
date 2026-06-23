@@ -1,0 +1,23 @@
+[Unit]
+Description=IOMAT Mineracao - Celery worker (classificacao em background)
+After=network.target redis-server.service postgresql.service
+Wants=redis-server.service postgresql.service
+
+[Service]
+User=iomat
+Group=www-data
+WorkingDirectory=/srv/iomat/web
+# IMPORTANTE: o config/celery.py faz setdefault para config.settings.DEV.
+# O .env precisa conter DJANGO_SETTINGS_MODULE=config.settings.prod para o
+# worker NAO subir em SQLite/dev por engano.
+EnvironmentFile=/srv/iomat/web/.env
+# concurrency=1: a GPU e unica, a classificacao e sequencial; mais de 1
+# worker so causaria disputa pela VRAM.
+ExecStart=/srv/iomat/web/.venv/bin/celery -A config worker \
+    --loglevel=info \
+    --concurrency=1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
