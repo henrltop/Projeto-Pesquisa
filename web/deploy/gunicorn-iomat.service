@@ -1,0 +1,24 @@
+[Unit]
+Description=IOMAT Mineracao - Gunicorn (Django/WSGI)
+After=network.target postgresql.service redis-server.service
+Wants=postgresql.service redis-server.service
+
+[Service]
+User=iomat
+Group=www-data
+WorkingDirectory=/srv/iomat/web
+# Carrega SECRET_KEY, POSTGRES_*, FIELD_ENCRYPTION_KEY, REDIS_URL,
+# DJANGO_SETTINGS_MODULE=config.settings.prod, etc.
+EnvironmentFile=/srv/iomat/web/.env
+ExecStart=/srv/iomat/web/.venv/bin/gunicorn \
+    --workers 3 \
+    --bind 127.0.0.1:8000 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
+    config.wsgi:application
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

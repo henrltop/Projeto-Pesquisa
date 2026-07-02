@@ -91,7 +91,14 @@ Formato exato:
 
 
 class ClassificacaoParseError(Exception):
-    """Modelo retornou algo que nao consegui interpretar como JSON."""
+    """Modelo retornou algo que nao consegui interpretar como JSON.
+
+    Carrega a `resposta_crua` (texto bruto que o modelo devolveu) para que o
+    pipeline possa salva-la mesmo no erro, para auditoria do benchmark.
+    """
+    def __init__(self, mensagem: str, resposta_crua: str = ""):
+        super().__init__(mensagem)
+        self.resposta_crua = resposta_crua
 
 
 @dataclass
@@ -162,7 +169,9 @@ class OpenAIClassifier:
             # a verificacao (mesma postura do delimitador, que usa requests verify=False).
             if verify_ssl is None:
                 verify_ssl = False
-            kwargs["http_client"] = httpx.Client(verify=verify_ssl, timeout=httpx.Timeout(120.0))
+            # Timeout generoso: modelos de raciocinio (ex.: gpt-oss:20b) ficam lentos
+            # quando o servidor esta sob carga (varios benchmarks ao mesmo tempo).
+            kwargs["http_client"] = httpx.Client(verify=verify_ssl, timeout=httpx.Timeout(300.0))
         self.client = OpenAI(**kwargs)
         self.model = model
         self.is_openwebui = bool(base_url)
@@ -240,16 +249,33 @@ class OpenAIClassifier:
                     # Falha final: propaga pra task marcar como erro (nao como duvidoso silencioso)
                     raise ClassificacaoParseError(
                         f"Modelo nao retornou JSON valido apos {retries} tentativas. "
-                        f"Ultima resposta crua (trecho): {resposta_crua[:300]!r}"
+                        f"Ultima resposta crua (trecho): {resposta_crua[:300]!r}",
+                        resposta_crua=resposta_crua,
                     )
 
                 classe = (parsed.get("classificacao") or "").lower().strip()
                 if classe not in {"super_relevante", "relevante", "duvidoso", "irrelevante"}:
+                    # JSON valido mas SEM o campo 'classificacao' esperado (ex.: modelo
+                    # fraco devolveu {"resumo": ...}). Isso e FALHA DE FORMATO, nao "duvida":
+                    # tenta de novo com reforco e, se persistir, conta como ERRO. Antes isso
+                    # virava "duvidoso" silenciosamente, o que mascarava modelos ruins e
+                    # contaminava o benchmark (dezenas de duvidosos falsos).
                     logger.warning(
-                        "Classe invalida retornada: %r; forcando duvidoso. Parsed: %r",
-                        classe, parsed,
+                        "Resposta sem 'classificacao' valida (tentativa %d/%d). Parsed: %r",
+                        tentativa + 1, retries, parsed,
                     )
-                    classe = "duvidoso"
+                    if tentativa < retries - 1:
+                        prompt_usuario = (
+                            f"{prompt_usuario}\n\n"
+                            "IMPORTANTE: devolva SOMENTE o JSON com a chave \"classificacao\" "
+                            "valendo exatamente super_relevante, relevante, duvidoso ou irrelevante."
+                        )
+                        continue
+                    raise ClassificacaoParseError(
+                        f"Modelo nao retornou 'classificacao' valida apos {retries} tentativas. "
+                        f"Ultima resposta (trecho): {resposta_crua[:300]!r}",
+                        resposta_crua=resposta_crua,
+                    )
 
                 usage = getattr(response, "usage", None)
                 return Classificacao(

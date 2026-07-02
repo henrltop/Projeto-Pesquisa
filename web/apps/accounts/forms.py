@@ -32,6 +32,12 @@ class DeveloperForm(forms.Form):
         required=False,
         widget=forms.HiddenInput(),
     )
+    ver_respostas_brutas = forms.BooleanField(
+        label="Ver respostas brutas da IA",
+        required=False,
+        help_text="Mostra o JSON cru que o modelo devolveu (para conferir veracidade). "
+                  "As respostas brutas sao sempre salvas; isto so muda a exibicao.",
+    )
 
     def clean(self):
         cleaned = super().clean()

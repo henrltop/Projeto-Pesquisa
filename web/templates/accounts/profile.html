@@ -63,6 +63,14 @@
       </div>
 
       <div>
+        <label class="flex items-center gap-2 text-sm">
+          {{ form.ver_respostas_brutas }}
+          <span>Ver respostas brutas da IA (JSON cru)</span>
+        </label>
+        <p class="help-text">{{ form.ver_respostas_brutas.help_text }}</p>
+      </div>
+
+      <div>
         <button type="button"
                 class="btn-secondary"
                 hx-post="{% url 'accounts:validar_provedor' %}"

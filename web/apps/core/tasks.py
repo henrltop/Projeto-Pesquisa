@@ -17,7 +17,7 @@ from apps.searches.models import PipelineStage, SearchJob, criar_stages
 from .contexto import montar_contexto_delimitado
 from .delimitador import Delimitador
 from .iomat_client import IomatError, baixar_pdf, buscar_por_ano
-from .openai_client import OpenAIClassifier
+from .openai_client import ClassificacaoParseError, OpenAIClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -168,8 +168,12 @@ def process_search_job(self, search_job_id: int) -> None:
         stage_dedup.iniciar(total=len(documentos_do_job), mensagem="verificando reaproveitaveis")
         reaproveitados_pks: set[int] = set()
         ja_classificados_pks: set[int] = set()
+        # forcar_reclassificacao = "classifique tudo de novo" (modo benchmark de modelos):
+        # ignora tanto a revisao humana quanto a classificacao anterior. So ADICIONA novas
+        # linhas de Classification (com modelo_ia e search_job proprios); nunca altera/apaga
+        # classificacoes, revisoes ou buscas ja existentes.
         for i, doc in enumerate(documentos_do_job):
-            if Review.objects.filter(document=doc).exists():
+            if not job.forcar_reclassificacao and Review.objects.filter(document=doc).exists():
                 reaproveitados_pks.add(doc.pk)
             elif (
                 not job.forcar_reclassificacao
@@ -278,7 +282,30 @@ def process_search_job(self, search_job_id: int) -> None:
                     )
                 else:
                     c = classifier.classificar(doc.texto_bruto or "", job.termo)
+            except ClassificacaoParseError as exc:
+                # Falha de FORMATO (modelo nao devolveu JSON/'classificacao' valido).
+                # Guardamos a resposta_crua numa linha marcada como 'erro' para poder
+                # auditar no benchmark exatamente o que o modelo respondeu.
+                logger.warning("Falha de formato no doc %s: %s", doc.pk, exc)
+                Classification.objects.create(
+                    document=doc,
+                    search_job=job,
+                    termo_buscado=job.termo,
+                    classificacao=Classification.Classificacao.ERRO,
+                    tipo_ato="",
+                    justificativa=str(exc)[:2000],
+                    prompt_enviado="",
+                    resposta_crua=getattr(exc, "resposta_crua", "") or "",
+                    modelo_ia=classifier.model,
+                    com_contexto=com_contexto,
+                    paginas_contexto=paginas_ctx,
+                )
+                job.total_erros += 1
+                job.save(update_fields=["total_erros"])
+                stage_classificacao.tick(feitos=idx + 1, mensagem=f"erro formato doc {doc.pk}")
+                continue
             except Exception as exc:  # noqa: BLE001
+                # Erro de infraestrutura (timeout, conexao, etc.) - sem resposta util.
                 logger.exception("Erro classificando doc %s", doc.pk)
                 job.total_erros += 1
                 job.save(update_fields=["total_erros"])

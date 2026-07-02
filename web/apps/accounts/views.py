@@ -27,6 +27,7 @@ def profile(request):
                 profile_obj.modelo_selecionado = MODELO_OPENAI_PADRAO
             else:
                 profile_obj.modelo_selecionado = modelo
+            profile_obj.ver_respostas_brutas = form.cleaned_data.get("ver_respostas_brutas", False)
             profile_obj.save()
             messages.success(request, "Configuracoes de desenvolvedor atualizadas.")
             return redirect("accounts:profile")
@@ -35,6 +36,7 @@ def profile(request):
             "provider": profile_obj.provider,
             "openwebui_base_url": profile_obj.openwebui_base_url,
             "modelo_selecionado": profile_obj.modelo_selecionado,
+            "ver_respostas_brutas": profile_obj.ver_respostas_brutas,
         })
 
     return render(
