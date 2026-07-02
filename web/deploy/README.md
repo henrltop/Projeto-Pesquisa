@@ -129,7 +129,38 @@ sudo ufw allow OpenSSH
 
 ---
 
-## Atualizar depois (redeploy)
+## Comandos rápidos: `reiniciar_sistema` e `atualizar_sistema`
+
+Dois comandos globais para operar o site sem decorar caminhos:
+
+- **`reiniciar_sistema`** — reinicia o site (Gunicorn + Celery).
+- **`atualizar_sistema`** — `git pull` + dependências + migrações + estáticos + restart.
+
+### Instalação (uma vez só)
+
+Rode no servidor, com sudo. Cria "atalhos" em `/usr/local/bin` apontando para os
+scripts do repositório (assim `atualizar_sistema` também mantém a si mesmo atualizado):
+
+```bash
+cd /srv/iomat && sudo -u iomat git pull --ff-only          # traz os scripts
+sudo chmod +x /srv/iomat/web/deploy/reiniciar_sistema.sh \
+              /srv/iomat/web/deploy/atualizar_sistema.sh
+sudo ln -sf /srv/iomat/web/deploy/reiniciar_sistema.sh /usr/local/bin/reiniciar_sistema
+sudo ln -sf /srv/iomat/web/deploy/atualizar_sistema.sh /usr/local/bin/atualizar_sistema
+```
+
+### Uso (do dia a dia)
+
+```bash
+reiniciar_sistema     # reinicia o site
+atualizar_sistema     # puxa do git e sobe a nova versão
+```
+
+> Os dois usam `sudo` internamente (reiniciar serviços / rodar como usuário
+> `iomat`). Rode-os com um usuário que tenha sudo. Para não pedir senha toda vez,
+> dá para liberar no sudoers só o necessário (opcional).
+
+### Alternativa manual (equivalente ao `atualizar_sistema`)
 
 ```bash
 sudo -u iomat bash /srv/iomat/web/deploy/deploy.sh
